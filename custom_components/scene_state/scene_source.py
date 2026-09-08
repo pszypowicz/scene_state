@@ -6,10 +6,11 @@ from homeassistant.components.homeassistant.scene import (
     DATA_PLATFORM,
     HomeAssistantScene,
 )
-from homeassistant.core import HomeAssistant, State
+from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.helpers.entity_platform import EntityPlatform
 
 
+@callback
 def get_scene_targets(
     hass: HomeAssistant, scene_entity_id: str
 ) -> dict[str, State] | None:

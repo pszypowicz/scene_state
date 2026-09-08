@@ -49,6 +49,11 @@ async def test_setup_and_unload(hass: HomeAssistant) -> None:
     entry = await _setup(hass)
     assert entry.state is ConfigEntryState.LOADED
 
+    registry = er.async_get(hass)
+    sensor_entry = registry.async_get("binary_sensor.movie")
+    assert sensor_entry is not None
+    assert sensor_entry.unique_id == entry.entry_id
+
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
 
@@ -64,7 +69,9 @@ async def test_scene_rename_updates_option(hass: HomeAssistant) -> None:
     await hass.async_block_till_done()
 
     assert entry.options[CONF_ENTITY_ID] == "scene.film"
-    assert entry.state is ConfigEntryState.LOADED
+    state = hass.states.get("binary_sensor.movie")
+    assert state is not None
+    assert state.attributes["scene_entity_id"] == "scene.film"
 
 
 async def test_scene_removal_removes_entry(hass: HomeAssistant) -> None:

@@ -135,6 +135,18 @@ def _light(state: str, **attributes: object) -> State:
             id="rgbww_within_tolerance",
         ),
         pytest.param(
+            _light("on", color_mode="rgbw", rgbw_color=[10, 20, 30, 40]),
+            _light("on", color_mode="rgbw", rgbw_color=(15, 25, 35, 45)),
+            MatchResult(True),
+            id="rgbw_tuple_within_tolerance",
+        ),
+        pytest.param(
+            _light("on", color_mode="hs", hs_color=[30, 40]),
+            _light("on", color_mode="hs", hs_color=(31.0, 41.0)),
+            MatchResult(True),
+            id="hs_tuple_current_within_tolerance",
+        ),
+        pytest.param(
             _light("on", color_temp_kelvin=2700, hs_color=[30, 40]),
             _light("on", color_temp_kelvin=2720, hs_color=[200, 90]),
             MatchResult(True),

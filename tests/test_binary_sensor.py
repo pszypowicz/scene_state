@@ -36,7 +36,7 @@ MOVIE_SCENE = {
 }
 
 
-async def _setup(hass: HomeAssistant, grace_period: float = 5.0) -> MockConfigEntry:
+async def _setup(hass: HomeAssistant) -> MockConfigEntry:
     assert await async_setup_component(hass, "scene", {"scene": [MOVIE_SCENE]})
     await hass.async_block_till_done()
     entry = MockConfigEntry(
@@ -44,7 +44,7 @@ async def _setup(hass: HomeAssistant, grace_period: float = 5.0) -> MockConfigEn
         title="Movie",
         options={
             CONF_ENTITY_ID: "scene.movie",
-            CONF_GRACE_PERIOD: grace_period,
+            CONF_GRACE_PERIOD: 5.0,
             CONF_DEBOUNCE: 1.0,
         },
     )
@@ -155,13 +155,31 @@ async def test_activation_waits_for_grace_period(
     assert state.state == STATE_ON
 
 
-async def test_unload_removes_sensor(hass: HomeAssistant) -> None:
+async def test_unload_makes_sensor_unavailable(hass: HomeAssistant) -> None:
     """Unloading the entry marks the entity unavailable."""
     _set_members_matching(hass)
     entry = await _setup(hass)
 
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
+
+    state = hass.states.get(SENSOR_ENTITY_ID)
+    assert state is not None
+    assert state.state == STATE_UNAVAILABLE
+
+
+async def test_unload_with_pending_debounce_stops_tracker(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Unloading while a debounce runs leaves no timer and no later update."""
+    _set_members_matching(hass)
+    entry = await _setup(hass)
+    hass.states.async_set("light.a", "on", {"brightness": 10})
+    await hass.async_block_till_done()
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    await _advance(hass, freezer, 2.0)
 
     state = hass.states.get(SENSOR_ENTITY_ID)
     assert state is not None

@@ -50,8 +50,7 @@ Attributes:
 
 ## Installation
 
-1. In HACS, open Integrations, then the menu in the top right, then
-   Custom repositories.
+1. In HACS, open the menu in the top right, then Custom repositories.
 2. Add `https://github.com/pszypowicz/scene_state` with category Integration.
 3. Install Scene State and restart Home Assistant.
 
@@ -68,6 +67,8 @@ Both timers can be changed later from the helper options.
 - Only scenes defined in Home Assistant are supported, from the scene editor or
   from `scenes.yaml`. Scenes that live on a hub, for example Hue or KNX scenes,
   do not expose their targets to Home Assistant.
+- Scenes defined in YAML without an `id` have no entity registry entry. A
+  rename or removal of such a scene does not update or remove the helper.
 - The sensor does not control the scene. Use the scene entity to activate it.
 
 ## Development

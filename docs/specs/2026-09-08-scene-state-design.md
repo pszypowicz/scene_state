@@ -172,6 +172,10 @@ scene entity is not present. Core reads the same data for its own
 data. A later core pull request adds a public accessor, and then this module
 calls it.
 
+The platform data key is assigned by the first `scene:` platform load. A
+`scene:` block with its own `scan_interval` or `entity_namespace` creates a
+separate platform instance, and its scenes are not visible to the adapter.
+
 ### `matching.py`
 
 ```python
@@ -186,8 +190,8 @@ def match_state(desired: State, current: State) -> MatchResult
 
 `reason` is a short text for the debug log, for example
 `brightness: wanted 200, got 120`. The module holds the per-domain attribute
-table and the light color rules. It imports no Home Assistant helpers other
-than `State` and the attribute name constants.
+table and the light color rules. It imports nothing from Home Assistant other
+than `State`. Attribute names are literals in the module.
 
 ### `tracker.py`
 
@@ -304,7 +308,7 @@ LICENSE
   version.
 - `manifest.json` sets `integration_type` to `helper`, `iot_class` to
   `calculated`, `config_flow` to `true`, and `version` to `0.0.1`.
-- `strings.json` and `translations/en.json` hold the flow and entity strings.
+- `strings.json` and `translations/en.json` hold the flow strings.
 - `README.md` describes what the helper does, the matching rules in short, the
   installation through HACS as a custom repository, and the options.
 
