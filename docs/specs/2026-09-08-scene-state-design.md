@@ -152,9 +152,9 @@ All code lives in `custom_components/scene_state/`.
 | `scene_source.py` | read target states of a scene from the built-in scene platform | core internals, see below |
 | `matching.py` | pure comparison of a desired `State` and a current `State` | `homeassistant.core.State` only |
 | `tracker.py` | subscriptions, timers, evaluation, aggregate result | `scene_source`, `matching`, event helpers |
-| `binary_sensor.py` | the entity, maps the tracker result to a state | `tracker` |
+| `binary_sensor.py` | the entity, owns the tracker, maps its status to a state | `tracker` |
 | `config_flow.py` | schema-based config and options flow | selectors |
-| `__init__.py` | entry setup, unload, options update, source entity changes | `tracker`, helper integration API |
+| `__init__.py` | entry setup, unload, source entity changes | `tracker`, helper integration API |
 
 ### `scene_source.py`
 
@@ -237,8 +237,10 @@ Evaluation:
 
 ### `binary_sensor.py`
 
-- `_attr_should_poll = False`, `_attr_has_entity_name = True`,
-  `translation_key = "scene_active"`, name from translations.
+- `_attr_should_poll = False`, `_attr_has_entity_name = True`, and the name is
+  the config entry title, which is the scene friendly name at creation time.
+- The entity creates and owns the tracker. It starts the tracker in
+  `async_added_to_hass` and stops it on removal.
 - `unique_id` is the config entry ID.
 - `available` is `False` when the status is `SCENE_MISSING`.
 - `is_on` is `True` for `ACTIVE`, `False` for `INACTIVE`, and `None` for
@@ -263,14 +265,13 @@ exists.
 
 ### `__init__.py`
 
-- `async_setup_entry` creates the tracker from the options, stores it in
-  `entry.runtime_data`, forwards the `binary_sensor` platform, and registers an
-  update listener that reloads the entry.
-- It registers `async_handle_source_entity_changes` from
+- `async_setup_entry` registers `async_handle_source_entity_changes` from
   `homeassistant.helpers.helper_integration`, so that a rename of the scene
   entity updates the option, and a removal of the scene entity removes the
-  config entry.
-- `async_unload_entry` stops the tracker and unloads the platform.
+  config entry. It then forwards the `binary_sensor` platform.
+- The schema flow handler sets `options_flow_reloads`, so an options change
+  reloads the entry without a separate update listener.
+- `async_unload_entry` unloads the platform, which stops the tracker.
 
 ### Error handling
 
