@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# Run the formatter check, the linter, and the type checker.
+# Run every pre-commit hook except the test suite on all files.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-uv run ruff format --check .
-uv run ruff check .
-uv run mypy custom_components/scene_state
+export SKIP=pytest
+exec uv run pre-commit run --all-files

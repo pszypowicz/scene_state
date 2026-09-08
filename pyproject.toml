@@ -13,6 +13,7 @@ dev = [
     "pytest-homeassistant-custom-component==0.13.364",
     "ruff",
     "mypy",
+    "pre-commit",
 ]
 
 [tool.uv]
@@ -93,6 +94,10 @@ known-first-party = ["custom_components", "tests"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "pep257"
+
+[tool.codespell]
+ignore-words-list = "hass"
+skip = "uv.lock"
 
 [tool.mypy]
 python_version = "3.14"

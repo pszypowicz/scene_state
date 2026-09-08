@@ -21,7 +21,7 @@ jobs:
           category: integration
           ignore: brands
 
-  lint:
+  pre-commit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -29,16 +29,8 @@ jobs:
         with:
           python-version: "3.14"
       - run: uv sync --locked
-      - run: uv run ruff format --check .
-      - run: uv run ruff check .
-      - run: uv run mypy custom_components/scene_state
-
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/cache@v4
         with:
-          python-version: "3.14"
-      - run: uv sync --locked
-      - run: uv run pytest
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+      - run: uv run pre-commit run --all-files --show-diff-on-failure --color=always
