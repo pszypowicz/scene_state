@@ -8,6 +8,7 @@ import logging
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import (
     CALLBACK_TYPE,
+    CoreState,
     Event,
     EventStateChangedData,
     HomeAssistant,
@@ -17,6 +18,7 @@ from homeassistant.helpers.event import (
     async_call_later,
     async_track_state_change_event,
 )
+from homeassistant.helpers.start import async_at_started
 
 from .matching import match_state
 from .scene_source import get_scene_targets
@@ -57,8 +59,10 @@ class SceneTracker:
         self._members: frozenset[str] = frozenset()
         self._unsub_members: CALLBACK_TYPE | None = None
         self._unsub_scene: CALLBACK_TYPE | None = None
+        self._unsub_started: CALLBACK_TYPE | None = None
         self._cancel_debounce: CALLBACK_TYPE | None = None
         self._cancel_grace: CALLBACK_TYPE | None = None
+        self._started = False
 
     @property
     def scene_entity_id(self) -> str:
@@ -68,23 +72,42 @@ class SceneTracker:
     @callback
     def async_start(self) -> None:
         """Subscribe to the scene entity and run the first evaluation."""
+        if self._started:
+            return
+        self._started = True
         self._unsub_scene = async_track_state_change_event(
             self._hass, [self._scene_entity_id], self._handle_scene_event
         )
         self.async_evaluate()
+        if self._hass.state is not CoreState.running:
+            # The built-in scene platform publishes its data after its entities
+            # exist, so an evaluation during startup can miss a scene that is
+            # still loading. One more evaluation after startup closes that window.
+            self._unsub_started = async_at_started(self._hass, self._handle_started)
 
     @callback
     def async_stop(self) -> None:
         """Cancel timers and remove subscriptions."""
+        self._started = False
         self._cancel_timers()
+        if self._unsub_started is not None:
+            self._unsub_started()
+            self._unsub_started = None
         self._subscribe_members(frozenset())
         if self._unsub_scene is not None:
             self._unsub_scene()
             self._unsub_scene = None
 
     @callback
+    def _handle_started(self, _hass: HomeAssistant) -> None:
+        self._unsub_started = None
+        self.async_evaluate()
+
+    @callback
     def async_evaluate(self) -> None:
         """Compare every member with its target and update the status."""
+        if not self._started:
+            return
         targets = get_scene_targets(self._hass, self._scene_entity_id)
         if targets is None:
             self._subscribe_members(frozenset())

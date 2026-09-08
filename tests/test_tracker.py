@@ -4,7 +4,8 @@ from datetime import timedelta
 from unittest.mock import patch
 
 from freezegun.api import FrozenDateTimeFactory
-from homeassistant.core import HomeAssistant
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+from homeassistant.core import CoreState, HomeAssistant
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import async_fire_time_changed_exact
 
@@ -295,5 +296,56 @@ async def test_stop_cancels_pending_timers(
     await _advance(hass, freezer, 2.0)
     hass.states.async_set("light.a", "on", {"brightness": 20})
     await _advance(hass, freezer, 2.0)
+
+    assert updates == [SceneStatus.ACTIVE]
+
+
+async def test_scene_loaded_during_startup_is_tracked_after_start(
+    hass: HomeAssistant,
+) -> None:
+    """A tracker started before the scene platform recovers once startup ends."""
+    hass.set_state(CoreState.starting)
+    _set_members_matching(hass)
+    updates: list[SceneStatus] = []
+    tracker = _make_tracker(hass, updates, grace_period=0.0)
+    tracker.async_start()
+    assert tracker.status is SceneStatus.SCENE_MISSING
+
+    await _setup_scene(hass)
+    hass.set_state(CoreState.running)
+    hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
+    await hass.async_block_till_done()
+
+    assert tracker.status is SceneStatus.ACTIVE
+    tracker.async_stop()
+
+
+async def test_stop_removes_scene_subscription(hass: HomeAssistant) -> None:
+    """A scene state change after stop produces no update."""
+    await _setup_scene(hass)
+    _set_members_matching(hass)
+    updates: list[SceneStatus] = []
+    tracker = _make_tracker(hass, updates, grace_period=0.0)
+    tracker.async_start()
+
+    tracker.async_stop()
+    hass.states.async_set(SCENE_ENTITY_ID, ACTIVATED)
+    await hass.async_block_till_done()
+
+    assert updates == [SceneStatus.ACTIVE]
+
+
+async def test_evaluate_after_stop_is_ignored(hass: HomeAssistant) -> None:
+    """An evaluation request after stop neither updates nor resubscribes."""
+    await _setup_scene(hass)
+    _set_members_matching(hass)
+    updates: list[SceneStatus] = []
+    tracker = _make_tracker(hass, updates, debounce=0.0)
+    tracker.async_start()
+
+    tracker.async_stop()
+    tracker.async_evaluate()
+    hass.states.async_set("light.a", "on", {"brightness": 10})
+    await hass.async_block_till_done()
 
     assert updates == [SceneStatus.ACTIVE]
