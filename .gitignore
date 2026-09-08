@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Development Home Assistant instance
+config/*
+!config/configuration.yaml
+!config/scenes.yaml

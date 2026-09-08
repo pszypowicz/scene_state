@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Run the formatter check, the linter, and the type checker.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+uv run ruff format --check .
+uv run ruff check .
+uv run mypy custom_components/scene_state

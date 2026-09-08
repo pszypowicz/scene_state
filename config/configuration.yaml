@@ -1,0 +1,10 @@
+default_config:
+
+demo:
+
+scene: !include scenes.yaml
+
+logger:
+  default: info
+  logs:
+    custom_components.scene_state: debug

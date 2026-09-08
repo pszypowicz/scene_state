@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Run a development Home Assistant instance with the demo integration and this component.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+mkdir -p config/custom_components
+ln -sfn "$(pwd)/custom_components/scene_state" config/custom_components/scene_state
+
+exec uv run hass --config config --debug

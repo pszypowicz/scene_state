@@ -1,0 +1,101 @@
+[project]
+name = "scene-state"
+version = "0.0.1"
+description = "Home Assistant helper that tracks whether a scene is currently active"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.14.2"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "homeassistant==2026.9.1",
+    "pytest-homeassistant-custom-component==0.13.364",
+    "ruff",
+    "mypy",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 88
+extend-exclude = ["config"]
+
+[tool.ruff.lint]
+select = [
+    "A",
+    "ANN",
+    "ASYNC",
+    "B",
+    "C4",
+    "D",
+    "DTZ",
+    "E",
+    "ERA",
+    "F",
+    "FLY",
+    "FURB",
+    "G",
+    "I",
+    "ICN",
+    "INP",
+    "ISC",
+    "LOG",
+    "N",
+    "PERF",
+    "PGH",
+    "PIE",
+    "PL",
+    "PT",
+    "PYI",
+    "Q",
+    "RET",
+    "RSE",
+    "RUF",
+    "S",
+    "SIM",
+    "SLF",
+    "SLOT",
+    "T20",
+    "TID",
+    "TRY",
+    "UP",
+    "W",
+]
+ignore = [
+    "ANN401",
+    "D203",
+    "D213",
+    "E501",
+    "ISC001",
+    "PLR0911",
+    "PLR0912",
+    "PLR0913",
+    "PLR0915",
+    "PLR2004",
+    "TRY003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "SLF001", "PT011"]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+combine-as-imports = true
+known-first-party = ["custom_components", "tests"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+warn_unreachable = true
+show_error_codes = true

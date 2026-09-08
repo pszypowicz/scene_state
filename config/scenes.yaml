@@ -1,0 +1,33 @@
+- id: movie_night
+  name: Movie night
+  entities:
+    light.bed_light:
+      state: "on"
+      brightness: 64
+      color_temp_kelvin: 2700
+    light.ceiling_lights:
+      state: "off"
+    cover.living_room_window:
+      state: closed
+    media_player.living_room:
+      state: playing
+      volume_level: 0.3
+- id: reading
+  name: Reading
+  entities:
+    light.kitchen_lights:
+      state: "on"
+      brightness: 255
+      hs_color: [30, 40]
+    fan.living_room_fan:
+      state: "on"
+      percentage: 33
+- id: cozy_evening
+  name: Cozy evening
+  entities:
+    climate.heatpump:
+      state: heat
+      temperature: 21
+    cover.hall_window:
+      state: open
+      current_position: 70

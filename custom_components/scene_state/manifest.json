@@ -1,0 +1,13 @@
+{
+  "domain": "scene_state",
+  "name": "Scene State",
+  "after_dependencies": ["scene"],
+  "codeowners": ["@pszypowicz"],
+  "config_flow": true,
+  "documentation": "https://github.com/pszypowicz/scene_state",
+  "integration_type": "helper",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/pszypowicz/scene_state/issues",
+  "requirements": [],
+  "version": "0.0.1"
+}
