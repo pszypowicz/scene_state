@@ -1,5 +1,12 @@
 # Scene State
 
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![GitHub Release](https://img.shields.io/github/v/release/pszypowicz/scene_state)](https://github.com/pszypowicz/scene_state/releases)
+[![CI](https://github.com/pszypowicz/scene_state/actions/workflows/ci.yml/badge.svg)](https://github.com/pszypowicz/scene_state/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/pszypowicz/scene_state)](LICENSE)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
+[![Maintainer](https://img.shields.io/badge/maintainer-%40pszypowicz-blue.svg)](https://github.com/pszypowicz)
+
 A Home Assistant helper that answers one question for a scene: do all entities
 in the scene match the states that the scene defines?
 
@@ -50,11 +57,20 @@ Attributes:
 
 ## Installation
 
+[![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=pszypowicz&repository=scene_state&category=integration)
+
+Click the button above to open the repository in HACS. Or add it by hand:
+
 1. In HACS, open the menu in the top right, then Custom repositories.
 2. Add `https://github.com/pszypowicz/scene_state` with category Integration.
-3. Install Scene State and restart Home Assistant.
+
+Then install Scene State and restart Home Assistant.
 
 ## Configuration
+
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=scene_state)
+
+Click the button above to start the helper setup. Or start it by hand:
 
 1. Go to Settings, Devices and services, Helpers.
 2. Click Create helper and pick Scene State.
@@ -75,10 +91,16 @@ Both timers can be changed later from the helper options.
 
 ```bash
 uv sync
+uv run pre-commit install
 scripts/lint
 scripts/test
 scripts/develop
 ```
+
+The pre-commit hooks run the formatter, the linter, the type checker, and the
+tests before each commit. CI runs the same hooks on all files, so a commit that
+passes locally also passes the gate. `scripts/lint` runs all hooks except the
+tests on all files.
 
 `scripts/develop` starts Home Assistant from `config/` with the demo
 integration and a few sample scenes, and links this component into it.
