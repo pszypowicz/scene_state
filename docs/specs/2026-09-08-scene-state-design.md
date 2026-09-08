@@ -92,7 +92,8 @@ Rules that apply to every domain:
    the per-domain list below. The scene editor stores every attribute of an
    entity, so all other attributes are ignored.
 4. A desired attribute value of `None` is ignored.
-5. Numeric tolerances are inclusive. A difference equal to the tolerance is a
+5. A desired attribute that the current state does not report is a mismatch.
+6. Numeric tolerances are inclusive. A difference equal to the tolerance is a
    match.
 
 Per-domain attribute lists:
