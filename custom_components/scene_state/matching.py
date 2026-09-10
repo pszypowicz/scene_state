@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+import math
 from typing import Any, Self
 
 from homeassistant.core import State
@@ -23,6 +24,21 @@ class MatchResult:
     reason: str | None = None
 
 
+def _finite_tolerance(number: float) -> float | None:
+    """Return the number as a usable tolerance, or None when it cannot serve as one.
+
+    A negative tolerance would make an exactly equal value mismatch, so it is
+    clamped to zero instead. A number too large to become a float raises
+    OverflowError on conversion, and `from_options` must never raise during
+    entry setup, so such a number is dropped instead of propagated.
+    """
+    try:
+        value = float(number)
+    except OverflowError:
+        return None
+    return max(0.0, value) if math.isfinite(value) else None
+
+
 @dataclass(frozen=True, slots=True)
 class MatchProfile:
     """The comparison rules of one config entry.
@@ -30,6 +46,12 @@ class MatchProfile:
     A domain that is absent from `compare` has no stored selection, and every
     comparable attribute of that domain counts. An empty selection is different,
     and it compares the state string only.
+
+    The selection and the tolerance key different names for a light color
+    attribute. `compares` folds the attribute name through `selection_name`, so
+    every color representation shares one selection under "color". `tolerance`
+    looks up the raw attribute name instead, because `hs_color` and `xy_color`
+    do not share a scale and need separate numbers.
     """
 
     compare: Mapping[str, frozenset[str]]
@@ -48,11 +70,12 @@ class MatchProfile:
                 continue
             compare[key] = frozenset(str(name) for name in selection)
             tolerances[key] = {
-                str(name): float(number)
+                str(name): tolerance
                 for name, number in value.items()
                 if name != CONF_COMPARE
                 and isinstance(number, int | float)
                 and not isinstance(number, bool)
+                and (tolerance := _finite_tolerance(number)) is not None
             }
         return cls(compare, tolerances)
 
@@ -70,11 +93,14 @@ class MatchProfile:
 
 def _within(tolerance: float) -> Comparator:
     def compare(wanted: Any, got: Any) -> bool:
+        if isinstance(wanted, bool) or isinstance(got, bool):
+            # float(True) is 1.0, so a boolean would otherwise take the numeric
+            # path below and a tolerance of 1 would make True match False.
+            return bool(wanted == got)
         try:
             difference = abs(float(wanted) - float(got))
         except TypeError, ValueError:
-            # A tolerance means nothing for a value that is not a number, and a
-            # string or a boolean still has to compare somehow.
+            # A tolerance means nothing for a value that is not a number.
             return bool(wanted == got)
         # Float subtraction can exceed the tolerance by a rounding error.
         return difference <= tolerance + FLOAT_MARGIN
@@ -103,8 +129,8 @@ def _comparator(wanted: Any, tolerance: float | None) -> Comparator:
     """Return the comparator for one desired value.
 
     A scene stores a color as a list, and a light reports it as a tuple, so a
-    sequence always compares element by element. An absent tolerance is a margin
-    of zero, which demands equality.
+    non-string sequence compares element by element. An absent tolerance is a
+    margin of zero, which demands equality.
     """
     margin = 0.0 if tolerance is None else tolerance
     if not isinstance(wanted, str) and isinstance(wanted, Sequence):
