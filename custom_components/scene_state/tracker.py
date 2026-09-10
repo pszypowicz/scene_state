@@ -20,7 +20,7 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.helpers.start import async_at_started
 
-from .matching import match_state
+from .matching import MatchProfile, match_state
 from .scene_source import get_scene_targets
 
 _LOGGER = logging.getLogger(__name__)
@@ -46,6 +46,7 @@ class SceneTracker:
         scene_entity_id: str,
         grace_period: float,
         debounce: float,
+        profile: MatchProfile,
         on_update: Callable[[], None],
     ) -> None:
         """Initialize the tracker without subscribing."""
@@ -53,6 +54,7 @@ class SceneTracker:
         self._scene_entity_id = scene_entity_id
         self._grace_period = grace_period
         self._debounce = debounce
+        self._profile = profile
         self._on_update = on_update
         self.status = SceneStatus.SCENE_MISSING
         self.mismatched: list[str] = []
@@ -124,7 +126,7 @@ class SceneTracker:
             if current is None or current.state in UNKNOWN_STATES:
                 unknown = True
                 continue
-            result = match_state(desired, current)
+            result = match_state(desired, current, self._profile)
             if not result.matches:
                 _LOGGER.debug(
                     "%s: %s does not match, %s",

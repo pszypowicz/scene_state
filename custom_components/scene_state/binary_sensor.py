@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import CONF_DEBOUNCE, CONF_GRACE_PERIOD
+from .matching import MatchProfile
 from .tracker import SceneStatus, SceneTracker
 
 ATTR_SCENE_ENTITY_ID = "scene_entity_id"
@@ -39,6 +40,7 @@ class SceneStateBinarySensor(BinarySensorEntity):
             entry.options[CONF_ENTITY_ID],
             float(entry.options[CONF_GRACE_PERIOD]),
             float(entry.options[CONF_DEBOUNCE]),
+            MatchProfile.from_options(entry.options),
             self._handle_tracker_update,
         )
 

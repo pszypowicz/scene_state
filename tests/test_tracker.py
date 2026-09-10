@@ -9,6 +9,7 @@ from homeassistant.core import CoreState, HomeAssistant
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import async_fire_time_changed_exact
 
+from custom_components.scene_state.matching import MatchProfile
 from custom_components.scene_state.tracker import SceneStatus, SceneTracker
 
 SCENE_ENTITY_ID = "scene.movie"
@@ -38,12 +39,14 @@ def _make_tracker(
     updates: list[SceneStatus],
     grace_period: float = 5.0,
     debounce: float = 1.0,
+    profile: MatchProfile | None = None,
 ) -> SceneTracker:
     tracker = SceneTracker(
         hass,
         SCENE_ENTITY_ID,
         grace_period,
         debounce,
+        profile if profile is not None else MatchProfile.from_options({}),
         lambda: updates.append(tracker.status),
     )
     return tracker
@@ -349,3 +352,26 @@ async def test_evaluate_after_stop_is_ignored(hass: HomeAssistant) -> None:
     await hass.async_block_till_done()
 
     assert updates == [SceneStatus.ACTIVE]
+
+
+async def test_profile_changes_the_status(hass: HomeAssistant) -> None:
+    """The same member state gives a different status under two profiles."""
+    await _setup_scene(hass)
+    hass.states.async_set("light.a", "on", {"brightness": 103})
+    hass.states.async_set("switch.b", "off")
+
+    strict = _make_tracker(hass, [])
+    strict.async_start()
+    assert strict.status is SceneStatus.INACTIVE
+    strict.async_stop()
+
+    lenient = _make_tracker(
+        hass,
+        [],
+        profile=MatchProfile.from_options(
+            {"light": {"compare": ["brightness"], "brightness": 3}}
+        ),
+    )
+    lenient.async_start()
+    assert lenient.status is SceneStatus.ACTIVE
+    lenient.async_stop()
