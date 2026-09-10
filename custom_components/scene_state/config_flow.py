@@ -1,6 +1,7 @@
 """Config flow for the Scene State integration."""
 
 from collections.abc import Mapping
+import logging
 from typing import Any, override
 
 from homeassistant.const import CONF_ENTITY_ID
@@ -27,6 +28,8 @@ from .const import (
     MAX_GRACE_PERIOD,
 )
 from .scene_source import get_scene_targets
+
+_LOGGER = logging.getLogger(__name__)
 
 STEP_DOMAIN = "domain"
 FLOW_STATE_DOMAIN = "domain"
@@ -136,8 +139,15 @@ async def _remember_domain(
 
 
 async def _after_init(options: dict[str, Any]) -> str | None:
-    """Continue to the domain step, or end the flow and write the options."""
-    if options.get(CONF_CONFIGURE) is None:
+    """Continue to the domain step, or end the flow and write the options.
+
+    Popping the key here, rather than in whatever step follows, prevents a
+    stuck flow: if the tracked scene disappears, the init schema no longer
+    carries this optional key, so nothing else would strip a leftover value
+    out of options, and a later submit would keep reading it and routing
+    away from a save.
+    """
+    if options.pop(CONF_CONFIGURE, None) is None:
         return None
     return STEP_DOMAIN
 
@@ -153,18 +163,22 @@ async def _domain_schema(handler: SchemaCommonFlowHandler) -> vol.Schema | None:
 
     The option list is empty when the domain no longer has anything to
     compare, for example because the tracked scene left the scene platform
-    while the dialog was open. A schema of None skips the step and follows
-    its next_step back to init, so a stored rule is left untouched instead of
-    being overwritten by the only value such a step could ever submit: an
-    empty selection.
+    while the dialog was open. A schema of None skips the step, so a stored
+    rule is left untouched instead of being overwritten by the only value
+    such a step could ever submit: an empty selection. A missing flow_state
+    entry (no domain was ever picked, for example a hand-edited entry that
+    carries a stale configure value) is treated the same way.
     """
-    domain = handler.flow_state[FLOW_STATE_DOMAIN]
-    options = _selection_options(_targets(handler), domain)
+    domain = handler.flow_state.get(FLOW_STATE_DOMAIN)
+    options = (
+        _selection_options(_targets(handler), domain) if domain is not None else []
+    )
     if not options:
-        # A skipped step never reaches _store_selection, so nothing else pops
-        # this key here. Left in place, init keeps reading it on every later
-        # submit and keeps routing back to this same skip instead of saving.
-        handler.options.pop(CONF_CONFIGURE, None)
+        _LOGGER.debug(
+            "%s: skipping the domain step, %s has nothing left to compare",
+            handler.options.get(CONF_ENTITY_ID),
+            domain,
+        )
         return None
     return vol.Schema({vol.Required(CONF_COMPARE): _select(options, multiple=True)})
 
@@ -183,10 +197,6 @@ async def _store_selection(
 ) -> dict[str, Any]:
     """Write the selection under the domain key, and drop dead tolerances."""
     domain = handler.flow_state[FLOW_STATE_DOMAIN]
-    # A submitted step is how the routing key normally gets cleared. Without
-    # this pop, a later init submit that offers no domain still finds a
-    # leftover value here and keeps routing back to domain instead of saving.
-    handler.options.pop(CONF_CONFIGURE, None)
     selected = list(user_input[CONF_COMPARE])
     stored = _stored_rule(handler, domain)
     kept = {

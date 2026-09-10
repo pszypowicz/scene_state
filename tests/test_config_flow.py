@@ -1,5 +1,7 @@
 """Tests for the config flow."""
 
+import json
+from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
@@ -362,3 +364,11 @@ async def test_domain_step_ignores_a_malformed_stored_rule(hass: HomeAssistant) 
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options["light"] == {CONF_COMPARE: ["effect"]}
+
+
+def test_strings_and_translations_agree() -> None:
+    """Home Assistant serves translations/en.json, so it must mirror strings.json."""
+    root = Path(__file__).parent.parent / "custom_components" / "scene_state"
+    strings = json.loads((root / "strings.json").read_text())
+    english = json.loads((root / "translations" / "en.json").read_text())
+    assert strings == english
