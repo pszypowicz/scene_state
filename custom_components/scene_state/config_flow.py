@@ -142,17 +142,37 @@ async def _after_init(options: dict[str, Any]) -> str | None:
     return STEP_DOMAIN
 
 
-async def _domain_schema(handler: SchemaCommonFlowHandler) -> vol.Schema:
-    """Return the checkbox list of the attributes of the picked domain."""
+def _stored_rule(handler: SchemaCommonFlowHandler, domain: str) -> Mapping[str, Any]:
+    """Return the stored rule of the domain, empty when it is absent or malformed."""
+    stored = handler.options.get(domain)
+    return stored if isinstance(stored, Mapping) else {}
+
+
+async def _domain_schema(handler: SchemaCommonFlowHandler) -> vol.Schema | None:
+    """Return the checkbox list of the attributes of the picked domain.
+
+    The option list is empty when the domain no longer has anything to
+    compare, for example because the tracked scene left the scene platform
+    while the dialog was open. A schema of None skips the step and follows
+    its next_step back to init, so a stored rule is left untouched instead of
+    being overwritten by the only value such a step could ever submit: an
+    empty selection.
+    """
     domain = handler.flow_state[FLOW_STATE_DOMAIN]
     options = _selection_options(_targets(handler), domain)
+    if not options:
+        # A skipped step never reaches _store_selection, so nothing else pops
+        # this key here. Left in place, init keeps reading it on every later
+        # submit and keeps routing back to this same skip instead of saving.
+        handler.options.pop(CONF_CONFIGURE, None)
+        return None
     return vol.Schema({vol.Required(CONF_COMPARE): _select(options, multiple=True)})
 
 
 async def _domain_suggestion(handler: SchemaCommonFlowHandler) -> dict[str, Any]:
     """Suggest the stored selection, or every name on a first visit."""
     domain = handler.flow_state[FLOW_STATE_DOMAIN]
-    stored = handler.options.get(domain, {})
+    stored = _stored_rule(handler, domain)
     if CONF_COMPARE in stored:
         return {CONF_COMPARE: list(stored[CONF_COMPARE])}
     return {CONF_COMPARE: _selection_options(_targets(handler), domain)}
@@ -163,11 +183,12 @@ async def _store_selection(
 ) -> dict[str, Any]:
     """Write the selection under the domain key, and drop dead tolerances."""
     domain = handler.flow_state[FLOW_STATE_DOMAIN]
-    # The routing callable reads the options, so the key travels there. It must
-    # not reach the entry.
+    # A submitted step is how the routing key normally gets cleared. Without
+    # this pop, a later init submit that offers no domain still finds a
+    # leftover value here and keeps routing back to domain instead of saving.
     handler.options.pop(CONF_CONFIGURE, None)
     selected = list(user_input[CONF_COMPARE])
-    stored = handler.options.get(domain, {})
+    stored = _stored_rule(handler, domain)
     kept = {
         attribute: number
         for attribute, number in stored.items()

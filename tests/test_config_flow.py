@@ -164,6 +164,17 @@ async def _open_options(hass: HomeAssistant) -> tuple[MockConfigEntry, dict[str,
     return entry, result
 
 
+async def _remove_the_scene(hass: HomeAssistant) -> None:
+    """Reload the scene platform with the tracked scene stripped of its members."""
+    with patch(
+        "homeassistant.config.load_yaml_config_file",
+        autospec=True,
+        return_value={"scene": {"name": "Mixed", "entities": {}}},
+    ):
+        await hass.services.async_call("scene", "reload", blocking=True)
+        await hass.async_block_till_done()
+
+
 async def test_init_lists_scene_domains(hass: HomeAssistant) -> None:
     """The dropdown offers the domains that have something to compare."""
     await _setup_mixed_scene(hass)
@@ -264,3 +275,90 @@ async def test_domain_step_suggests_the_stored_selection(hass: HomeAssistant) ->
     )
 
     assert _suggested(result, CONF_COMPARE) == ["effect"]
+
+
+async def test_domain_step_skipped_keeps_the_stored_rule(hass: HomeAssistant) -> None:
+    """A domain that lost every comparable attribute leaves its stored rule alone."""
+    await _setup_mixed_scene(hass)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Mixed",
+        options={
+            **MIXED_OPTIONS,
+            "light": {CONF_COMPARE: ["brightness"], "brightness": 7},
+        },
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    await _remove_the_scene(hass)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {CONF_GRACE_PERIOD: 5.0, CONF_DEBOUNCE: 1.0, CONF_CONFIGURE: "light"},
+    )
+    assert result["step_id"] == "init"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_GRACE_PERIOD: 5.0, CONF_DEBOUNCE: 1.0}
+    )
+    await hass.async_block_till_done()
+
+    assert entry.options["light"] == {CONF_COMPARE: ["brightness"], "brightness": 7}
+
+
+async def test_init_closes_after_the_domain_step_is_skipped(
+    hass: HomeAssistant,
+) -> None:
+    """A routing key left over from a skipped domain step does not strand the flow."""
+    await _setup_mixed_scene(hass)
+    entry, result = await _open_options(hass)
+    await _remove_the_scene(hass)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {CONF_GRACE_PERIOD: 5.0, CONF_DEBOUNCE: 1.0, CONF_CONFIGURE: "light"},
+    )
+    assert result["step_id"] == "init"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_GRACE_PERIOD: 5.0, CONF_DEBOUNCE: 1.0}
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert CONF_CONFIGURE not in entry.options
+
+
+async def test_domain_step_ignores_a_malformed_stored_rule(hass: HomeAssistant) -> None:
+    """A hand-edited, non-mapping domain value does not crash the domain step."""
+    await _setup_mixed_scene(hass)
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Mixed", options={**MIXED_OPTIONS, "light": ["effect"]}
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {CONF_GRACE_PERIOD: 5.0, CONF_DEBOUNCE: 1.0, CONF_CONFIGURE: "light"},
+    )
+    assert result["step_id"] == "domain"
+    assert _suggested(result, CONF_COMPARE) == ["brightness", "effect"]
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_COMPARE: ["effect"]}
+    )
+    assert result["step_id"] == "init"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_GRACE_PERIOD: 5.0, CONF_DEBOUNCE: 1.0}
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["light"] == {CONF_COMPARE: ["effect"]}
