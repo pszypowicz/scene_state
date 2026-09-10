@@ -1,5 +1,6 @@
 """Tests for the config flow."""
 
+from typing import Any
 from unittest.mock import patch
 
 from homeassistant.config_entries import SOURCE_USER, ConfigEntryState
@@ -8,8 +9,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+import voluptuous as vol
 
 from custom_components.scene_state.const import (
+    CONF_COMPARE,
+    CONF_CONFIGURE,
     CONF_DEBOUNCE,
     CONF_GRACE_PERIOD,
     DOMAIN,
@@ -105,3 +109,158 @@ async def test_options_flow_updates_and_reloads(hass: HomeAssistant) -> None:
     assert mock_unload_entry.call_count == 1
     assert mock_setup_entry.call_count == 2
     assert entry.state is ConfigEntryState.LOADED
+
+
+MIXED_SCENE = {
+    "name": "Mixed",
+    "entities": {
+        "light.a": {"state": "on", "brightness": 100, "effect": "none"},
+        "cover.b": {"state": "open", "current_position": 70},
+        "switch.c": "on",
+    },
+}
+MIXED_OPTIONS = {
+    CONF_ENTITY_ID: "scene.mixed",
+    CONF_GRACE_PERIOD: 5.0,
+    CONF_DEBOUNCE: 1.0,
+}
+
+
+async def _setup_mixed_scene(hass: HomeAssistant) -> None:
+    assert await async_setup_component(hass, "scene", {"scene": [MIXED_SCENE]})
+    await hass.async_block_till_done()
+
+
+def _marker(result: dict[str, Any], key: str) -> vol.Marker:
+    for marker in result["data_schema"].schema:
+        if marker.schema == key:
+            return marker
+    raise AssertionError(f"{key} is not in the schema")
+
+
+def _keys(result: dict[str, Any]) -> list[str]:
+    return [marker.schema for marker in result["data_schema"].schema]
+
+
+def _selector_options(result: dict[str, Any], key: str) -> list[str]:
+    schema = result["data_schema"].schema
+    for marker, value in schema.items():
+        if marker.schema == key:
+            return [option["value"] for option in value.config["options"]]
+    raise AssertionError(f"{key} is not in the schema")
+
+
+def _suggested(result: dict[str, Any], key: str) -> Any:
+    description = _marker(result, key).description or {}
+    return description.get("suggested_value")
+
+
+async def _open_options(hass: HomeAssistant) -> tuple[MockConfigEntry, dict[str, Any]]:
+    entry = MockConfigEntry(domain=DOMAIN, title="Mixed", options=MIXED_OPTIONS)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    return entry, result
+
+
+async def test_init_lists_scene_domains(hass: HomeAssistant) -> None:
+    """The dropdown offers the domains that have something to compare."""
+    await _setup_mixed_scene(hass)
+    _entry, result = await _open_options(hass)
+
+    assert result["step_id"] == "init"
+    assert _selector_options(result, CONF_CONFIGURE) == ["cover", "light"]
+
+
+async def test_init_without_scene_has_no_dropdown(hass: HomeAssistant) -> None:
+    """An unloaded scene leaves the dropdown out."""
+    entry = MockConfigEntry(domain=DOMAIN, title="Mixed", options=MIXED_OPTIONS)
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    assert CONF_CONFIGURE not in _keys(result)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_GRACE_PERIOD: 2.0, CONF_DEBOUNCE: 0.5}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
+async def test_domain_step_suggests_every_name(hass: HomeAssistant) -> None:
+    """A first visit arrives with every attribute selected."""
+    await _setup_mixed_scene(hass)
+    _entry, result = await _open_options(hass)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {CONF_GRACE_PERIOD: 5.0, CONF_DEBOUNCE: 1.0, CONF_CONFIGURE: "light"},
+    )
+
+    assert result["step_id"] == "domain"
+    assert _selector_options(result, CONF_COMPARE) == ["brightness", "effect"]
+    assert _suggested(result, CONF_COMPARE) == ["brightness", "effect"]
+
+
+async def test_domain_step_stores_the_selection(hass: HomeAssistant) -> None:
+    """The selection lands under the domain key, and configure does not."""
+    await _setup_mixed_scene(hass)
+    entry, result = await _open_options(hass)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {CONF_GRACE_PERIOD: 5.0, CONF_DEBOUNCE: 1.0, CONF_CONFIGURE: "light"},
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_COMPARE: ["effect"]}
+    )
+    assert result["step_id"] == "init"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_GRACE_PERIOD: 5.0, CONF_DEBOUNCE: 1.0}
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["light"] == {CONF_COMPARE: ["effect"]}
+    assert CONF_CONFIGURE not in entry.options
+
+
+async def test_domain_step_stores_an_empty_selection(hass: HomeAssistant) -> None:
+    """Comparing the state only is a legitimate choice."""
+    await _setup_mixed_scene(hass)
+    entry, result = await _open_options(hass)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {CONF_GRACE_PERIOD: 5.0, CONF_DEBOUNCE: 1.0, CONF_CONFIGURE: "cover"},
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_COMPARE: []}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_GRACE_PERIOD: 5.0, CONF_DEBOUNCE: 1.0}
+    )
+    await hass.async_block_till_done()
+
+    assert entry.options["cover"] == {CONF_COMPARE: []}
+
+
+async def test_domain_step_suggests_the_stored_selection(hass: HomeAssistant) -> None:
+    """A second visit arrives with what the user stored."""
+    await _setup_mixed_scene(hass)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Mixed",
+        options={**MIXED_OPTIONS, "light": {CONF_COMPARE: ["effect"]}},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {CONF_GRACE_PERIOD: 5.0, CONF_DEBOUNCE: 1.0, CONF_CONFIGURE: "light"},
+    )
+
+    assert _suggested(result, CONF_COMPARE) == ["effect"]
