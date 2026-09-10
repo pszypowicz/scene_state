@@ -127,6 +127,47 @@ MIXED_OPTIONS = {
     CONF_DEBOUNCE: 1.0,
 }
 
+COLOR_SCENE = {
+    "name": "Color",
+    "entities": {
+        "light.a": {
+            "state": "on",
+            "brightness": 100,
+            "color_mode": "hs",
+            "hs_color": [30, 40],
+        },
+        "light.b": {"state": "on", "brightness": 200, "effect": "none"},
+    },
+}
+COLOR_OPTIONS = {
+    CONF_ENTITY_ID: "scene.color",
+    CONF_GRACE_PERIOD: 5.0,
+    CONF_DEBOUNCE: 1.0,
+}
+
+
+async def _open_color_options(
+    hass: HomeAssistant,
+    options: dict[str, Any] | None = None,
+) -> tuple[MockConfigEntry, dict[str, Any]]:
+    assert await async_setup_component(hass, "scene", {"scene": [COLOR_SCENE]})
+    await hass.async_block_till_done()
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Color", options=options or COLOR_OPTIONS
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    return entry, result
+
+
+async def _pick_light(hass: HomeAssistant, result: dict[str, Any]) -> dict[str, Any]:
+    return await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {CONF_GRACE_PERIOD: 5.0, CONF_DEBOUNCE: 1.0, CONF_CONFIGURE: "light"},
+    )
+
 
 async def _setup_mixed_scene(hass: HomeAssistant) -> None:
     assert await async_setup_component(hass, "scene", {"scene": [MIXED_SCENE]})
@@ -364,6 +405,186 @@ async def test_domain_step_ignores_a_malformed_stored_rule(hass: HomeAssistant) 
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options["light"] == {CONF_COMPARE: ["effect"]}
+
+
+async def test_tolerances_offers_numeric_fields_only(hass: HomeAssistant) -> None:
+    """A string attribute gets no tolerance field."""
+    hass.states.async_set("light.a", "on", {"brightness": 100, "hs_color": [30, 40]})
+    hass.states.async_set("light.b", "on", {"brightness": 200, "effect": "none"})
+    _entry, result = await _open_color_options(hass)
+
+    result = await _pick_light(hass, result)
+    assert _selector_options(result, CONF_COMPARE) == [
+        "brightness",
+        "color",
+        "effect",
+    ]
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_COMPARE: ["brightness", "effect"]}
+    )
+
+    assert result["step_id"] == "tolerances"
+    assert _keys(result) == ["brightness"]
+
+
+async def test_tolerances_covers_every_representation(hass: HomeAssistant) -> None:
+    """A color selection renders a field per representation in use."""
+    hass.states.async_set("light.a", "on", {"brightness": 100, "hs_color": [30, 40]})
+    hass.states.async_set("light.b", "on", {"brightness": 200, "effect": "none"})
+    _entry, result = await _open_color_options(hass)
+
+    result = await _pick_light(hass, result)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_COMPARE: ["color"]}
+    )
+
+    assert _keys(result) == ["hs_color"]
+
+
+async def test_tolerances_suggests_the_measured_difference(
+    hass: HomeAssistant,
+) -> None:
+    """A first visit prefills the drift that the live states show."""
+    hass.states.async_set("light.a", "on", {"brightness": 100, "hs_color": [30, 40]})
+    hass.states.async_set("light.b", "on", {"brightness": 206, "effect": "none"})
+    _entry, result = await _open_color_options(hass)
+
+    result = await _pick_light(hass, result)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_COMPARE: ["brightness"]}
+    )
+
+    assert _suggested(result, "brightness") == 6.0
+    assert "brightness 6" in result["description_placeholders"]["measured"]
+
+
+async def test_tolerances_skips_unknown_members(hass: HomeAssistant) -> None:
+    """An unavailable member contributes no measurement."""
+    hass.states.async_set("light.a", "on", {"brightness": 100, "hs_color": [30, 40]})
+    hass.states.async_set("light.b", "unavailable")
+    _entry, result = await _open_color_options(hass)
+
+    result = await _pick_light(hass, result)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_COMPARE: ["brightness"]}
+    )
+
+    assert _suggested(result, "brightness") == 0.0
+
+
+async def test_tolerances_suggests_the_stored_value(hass: HomeAssistant) -> None:
+    """A second visit keeps the number that the user chose."""
+    hass.states.async_set("light.a", "on", {"brightness": 100, "hs_color": [30, 40]})
+    hass.states.async_set("light.b", "on", {"brightness": 206, "effect": "none"})
+    _entry, result = await _open_color_options(
+        hass,
+        options={
+            **COLOR_OPTIONS,
+            "light": {CONF_COMPARE: ["brightness"], "brightness": 2.0},
+        },
+    )
+
+    result = await _pick_light(hass, result)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_COMPARE: ["brightness"]}
+    )
+
+    assert _suggested(result, "brightness") == 2.0
+    assert "brightness 6" in result["description_placeholders"]["measured"]
+
+
+async def test_tolerances_step_is_skipped_without_a_number(
+    hass: HomeAssistant,
+) -> None:
+    """A selection of string attributes returns to the first step."""
+    hass.states.async_set("light.a", "on", {"brightness": 100, "hs_color": [30, 40]})
+    hass.states.async_set("light.b", "on", {"brightness": 200, "effect": "none"})
+    _entry, result = await _open_color_options(hass)
+
+    result = await _pick_light(hass, result)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_COMPARE: ["effect"]}
+    )
+
+    assert result["step_id"] == "init"
+
+
+async def test_tolerances_are_stored_beside_the_selection(
+    hass: HomeAssistant,
+) -> None:
+    """The submitted number lands under the domain key."""
+    hass.states.async_set("light.a", "on", {"brightness": 100, "hs_color": [30, 40]})
+    hass.states.async_set("light.b", "on", {"brightness": 206, "effect": "none"})
+    entry, result = await _open_color_options(hass)
+
+    result = await _pick_light(hass, result)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_COMPARE: ["brightness"]}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"brightness": 6.0}
+    )
+    assert result["step_id"] == "init"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_GRACE_PERIOD: 5.0, CONF_DEBOUNCE: 1.0}
+    )
+    await hass.async_block_till_done()
+
+    assert entry.options["light"] == {
+        CONF_COMPARE: ["brightness"],
+        "brightness": 6.0,
+    }
+
+
+async def test_clearing_color_drops_its_tolerance(hass: HomeAssistant) -> None:
+    """A cleared color box drops the tolerance of its representation."""
+    hass.states.async_set("light.a", "on", {"brightness": 100, "hs_color": [30, 40]})
+    hass.states.async_set("light.b", "on", {"brightness": 200, "effect": "none"})
+    entry, result = await _open_color_options(
+        hass,
+        options={
+            **COLOR_OPTIONS,
+            "light": {CONF_COMPARE: ["color"], "hs_color": 5.0},
+        },
+    )
+
+    result = await _pick_light(hass, result)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_COMPARE: ["effect"]}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_GRACE_PERIOD: 5.0, CONF_DEBOUNCE: 1.0}
+    )
+    await hass.async_block_till_done()
+
+    assert entry.options["light"] == {CONF_COMPARE: ["effect"]}
+
+
+async def test_tolerances_step_tolerates_a_missing_domain_rule(
+    hass: HomeAssistant,
+) -> None:
+    """A domain picked after its scene loses its members reaches CREATE_ENTRY.
+
+    The domain step skips itself once the scene has nothing left to compare,
+    so the tolerances step runs with a domain that was never stored. Reading
+    that domain rule must not raise.
+    """
+    await _setup_mixed_scene(hass)
+    _entry, result = await _open_options(hass)
+    await _remove_the_scene(hass)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {CONF_GRACE_PERIOD: 5.0, CONF_DEBOUNCE: 1.0, CONF_CONFIGURE: "light"},
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_GRACE_PERIOD: 5.0, CONF_DEBOUNCE: 1.0}
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
 def test_strings_and_translations_agree() -> None:

@@ -5,7 +5,6 @@ from datetime import datetime
 from enum import StrEnum
 import logging
 
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import (
     CALLBACK_TYPE,
     CoreState,
@@ -20,12 +19,11 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.helpers.start import async_at_started
 
+from .const import UNKNOWN_STATES
 from .matching import MatchProfile, match_state
 from .scene_source import get_scene_targets
 
 _LOGGER = logging.getLogger(__name__)
-
-UNKNOWN_STATES: frozenset[str] = frozenset({STATE_UNAVAILABLE, STATE_UNKNOWN})
 
 
 class SceneStatus(StrEnum):

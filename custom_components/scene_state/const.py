@@ -2,9 +2,11 @@
 
 from typing import Final
 
-from homeassistant.const import CONF_ENTITY_ID
+from homeassistant.const import CONF_ENTITY_ID, STATE_UNAVAILABLE, STATE_UNKNOWN
 
 DOMAIN: Final = "scene_state"
+
+UNKNOWN_STATES: Final = frozenset({STATE_UNAVAILABLE, STATE_UNKNOWN})
 
 CONF_GRACE_PERIOD: Final = "grace_period"
 CONF_DEBOUNCE: Final = "debounce"

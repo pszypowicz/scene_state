@@ -41,6 +41,11 @@
         "data": {
           "compare": "Compare"
         }
+      },
+      "tolerances": {
+        "title": "Tolerances",
+        "description": "A value of 0 demands an exact match. Each tolerance uses the scale of the attribute itself. Measured difference right now: {measured}.",
+        "data": {}
       }
     }
   }

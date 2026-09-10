@@ -1,11 +1,11 @@
 """Config flow for the Scene State integration."""
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 import logging
 from typing import Any, override
 
 from homeassistant.const import CONF_ENTITY_ID
-from homeassistant.core import State
+from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import selector
 from homeassistant.helpers.schema_config_entry_flow import (
     SchemaCommonFlowHandler,
@@ -15,7 +15,7 @@ from homeassistant.helpers.schema_config_entry_flow import (
 )
 import voluptuous as vol
 
-from .attributes import comparable, selection_name
+from .attributes import comparable, is_numeric, numeric_differences, selection_name
 from .const import (
     CONF_COMPARE,
     CONF_CONFIGURE,
@@ -26,12 +26,14 @@ from .const import (
     DOMAIN,
     MAX_DEBOUNCE,
     MAX_GRACE_PERIOD,
+    UNKNOWN_STATES,
 )
 from .scene_source import get_scene_targets
 
 _LOGGER = logging.getLogger(__name__)
 
 STEP_DOMAIN = "domain"
+STEP_TOLERANCES = "tolerances"
 FLOW_STATE_DOMAIN = "domain"
 
 
@@ -207,6 +209,126 @@ async def _store_selection(
     return {domain: {CONF_COMPARE: selected, **kept}}
 
 
+def _tolerance_attributes(
+    targets: Mapping[str, State], domain: str, selected: Sequence[str]
+) -> list[str]:
+    """Return the concrete numeric attributes that the selection covers."""
+    names = {
+        attribute
+        for state in _members(targets, domain)
+        for attribute in comparable(state)
+        if selection_name(attribute, domain) in selected
+        and is_numeric(state.attributes[attribute])
+    }
+    return sorted(names)
+
+
+def _measurements(
+    hass: HomeAssistant, targets: Mapping[str, State], domain: str
+) -> dict[str, float]:
+    """Return the largest live difference per attribute of the domain."""
+    largest: dict[str, float] = {}
+    for entity_id, desired in targets.items():
+        if desired.domain != domain:
+            continue
+        current = hass.states.get(entity_id)
+        if current is None or current.state in UNKNOWN_STATES:
+            continue
+        for attribute, difference in numeric_differences(desired, current).items():
+            largest[attribute] = max(largest.get(attribute, 0.0), difference)
+    return largest
+
+
+def _selected(handler: SchemaCommonFlowHandler) -> tuple[str, list[str]] | None:
+    """Return the picked domain and its stored selection, None when there is none.
+
+    The domain step skips itself when its scene is no longer loaded, so the
+    domain rule can be absent, malformed, or missing its compare list by the
+    time this step runs.
+    """
+    domain = handler.flow_state.get(FLOW_STATE_DOMAIN)
+    if domain is None:
+        return None
+    stored = _stored_rule(handler, domain)
+    selected = stored.get(CONF_COMPARE)
+    if not isinstance(selected, list | tuple):
+        return None
+    return domain, list(selected)
+
+
+async def _tolerances_schema(
+    handler: SchemaCommonFlowHandler,
+) -> vol.Schema | None:
+    """Return one number field per numeric attribute, or None for none."""
+    picked = _selected(handler)
+    if picked is None:
+        return None
+    domain, selected = picked
+    attributes = _tolerance_attributes(_targets(handler), domain, selected)
+    if not attributes:
+        return None
+    return vol.Schema(
+        {
+            vol.Required(attribute): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0, step="any", mode=selector.NumberSelectorMode.BOX
+                )
+            )
+            for attribute in attributes
+        }
+    )
+
+
+async def _tolerance_suggestion(
+    handler: SchemaCommonFlowHandler,
+) -> dict[str, Any]:
+    """Suggest the stored tolerance, or the measured difference.
+
+    Reached only once the schema already found a numeric attribute to tune,
+    so the selection here is never None.
+    """
+    picked = _selected(handler)
+    if picked is None:
+        return {}
+    domain, selected = picked
+    targets = _targets(handler)
+    stored = _stored_rule(handler, domain)
+    measured = _measurements(handler.parent_handler.hass, targets, domain)
+    return {
+        attribute: stored.get(attribute, measured.get(attribute, 0.0))
+        for attribute in _tolerance_attributes(targets, domain, selected)
+    }
+
+
+async def _tolerance_description(
+    handler: SchemaCommonFlowHandler,
+) -> dict[str, str]:
+    """Report the live difference per attribute, so the drift stays visible."""
+    picked = _selected(handler)
+    if picked is None:
+        return {"measured": "none"}
+    domain, _selection = picked
+    measured = _measurements(handler.parent_handler.hass, _targets(handler), domain)
+    if not measured:
+        return {"measured": "none"}
+    return {
+        "measured": ", ".join(
+            f"{attribute} {difference:g}"
+            for attribute, difference in sorted(measured.items())
+        )
+    }
+
+
+async def _store_tolerances(
+    handler: SchemaCommonFlowHandler, user_input: dict[str, Any]
+) -> dict[str, Any]:
+    """Merge the numbers into the mapping of the domain."""
+    domain = handler.flow_state[FLOW_STATE_DOMAIN]
+    stored = dict(handler.options[domain])
+    stored.update({name: float(number) for name, number in user_input.items()})
+    return {domain: stored}
+
+
 async def _abort_if_scene_tracked(
     handler: SchemaCommonFlowHandler, user_input: dict[str, Any]
 ) -> dict[str, Any]:
@@ -233,6 +355,13 @@ OPTIONS_FLOW = {
         _domain_schema,
         suggested_values=_domain_suggestion,
         validate_user_input=_store_selection,
+        next_step=STEP_TOLERANCES,
+    ),
+    STEP_TOLERANCES: SchemaFlowFormStep(
+        _tolerances_schema,
+        suggested_values=_tolerance_suggestion,
+        validate_user_input=_store_tolerances,
+        description_placeholders=_tolerance_description,
         next_step="init",
     ),
 }
