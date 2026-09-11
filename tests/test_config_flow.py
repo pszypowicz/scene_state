@@ -6,7 +6,7 @@ from typing import Any
 from unittest.mock import patch
 
 from homeassistant.config_entries import SOURCE_USER, ConfigEntryState
-from homeassistant.const import CONF_ENTITY_ID
+from homeassistant.const import CONF_ENTITY_ID, CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.setup import async_setup_component
@@ -58,8 +58,8 @@ async def test_user_flow_creates_entry(hass: HomeAssistant) -> None:
     assert mock_setup_entry.call_count == 1
 
 
-async def test_duplicate_scene_aborts(hass: HomeAssistant) -> None:
-    """A second entry for the same scene is refused."""
+async def test_duplicate_scene_creates_a_second_entry(hass: HomeAssistant) -> None:
+    """A second helper for the same scene is created rather than refused."""
     await _setup_scene(hass)
     MockConfigEntry(domain=DOMAIN, title="Movie", options=MOVIE_OPTIONS).add_to_hass(
         hass
@@ -71,9 +71,73 @@ async def test_duplicate_scene_aborts(hass: HomeAssistant) -> None:
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], MOVIE_OPTIONS
     )
+    await hass.async_block_till_done()
 
-    assert result["type"] is FlowResultType.ABORT
-    assert result["reason"] == "already_configured"
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Movie"
+    assert len(hass.config_entries.async_entries(DOMAIN)) == 2
+
+
+async def test_blank_name_falls_back_to_the_scene_title(hass: HomeAssistant) -> None:
+    """A name field left blank still titles the entry from the scene."""
+    await _setup_scene(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    with patch("custom_components.scene_state.async_setup_entry", return_value=True):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {**MOVIE_OPTIONS, CONF_NAME: ""}
+        )
+        await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Movie"
+
+
+async def test_supplied_name_becomes_the_title_and_entity_id(
+    hass: HomeAssistant,
+) -> None:
+    """A name on the create form titles the entry and slugs its entity id."""
+    await _setup_scene(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**MOVIE_OPTIONS, CONF_NAME: "Movie strict"}
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Movie strict"
+    assert hass.states.get("binary_sensor.scene_state_movie_strict") is not None
+
+
+async def test_two_helpers_on_one_scene_get_distinct_entities(
+    hass: HomeAssistant,
+) -> None:
+    """Two helpers on the same scene, named differently, get distinct entries."""
+    await _setup_scene(hass)
+
+    first = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    first = await hass.config_entries.flow.async_configure(
+        first["flow_id"], {**MOVIE_OPTIONS, CONF_NAME: "Strict"}
+    )
+    second = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    second = await hass.config_entries.flow.async_configure(
+        second["flow_id"], {**MOVIE_OPTIONS, CONF_NAME: "Loose"}
+    )
+    await hass.async_block_till_done()
+
+    assert first["title"] == "Strict"
+    assert second["title"] == "Loose"
+    assert hass.states.get("binary_sensor.scene_state_strict") is not None
+    assert hass.states.get("binary_sensor.scene_state_loose") is not None
 
 
 async def test_options_flow_updates_and_reloads(hass: HomeAssistant) -> None:

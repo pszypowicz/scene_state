@@ -4,7 +4,7 @@ from collections.abc import Mapping, Sequence
 import logging
 from typing import Any, override
 
-from homeassistant.const import CONF_ENTITY_ID
+from homeassistant.const import CONF_ENTITY_ID, CONF_NAME
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import selector
 from homeassistant.helpers.schema_config_entry_flow import (
@@ -64,6 +64,7 @@ CONFIG_SCHEMA = vol.Schema(
         vol.Required(CONF_ENTITY_ID): selector.EntitySelector(
             selector.EntitySelectorConfig(domain="scene", integration="homeassistant")
         ),
+        vol.Optional(CONF_NAME): selector.TextSelector(),
         **TIMING_FIELDS,
     }
 )
@@ -346,20 +347,8 @@ async def _store_tolerances(
     return {domain: stored}
 
 
-async def _abort_if_scene_tracked(
-    handler: SchemaCommonFlowHandler, user_input: dict[str, Any]
-) -> dict[str, Any]:
-    """Refuse a second entry for the same scene."""
-    handler.parent_handler._async_abort_entries_match(  # noqa: SLF001
-        {CONF_ENTITY_ID: user_input[CONF_ENTITY_ID]}
-    )
-    return user_input
-
-
 CONFIG_FLOW = {
-    "user": SchemaFlowFormStep(
-        CONFIG_SCHEMA, validate_user_input=_abort_if_scene_tracked
-    ),
+    "user": SchemaFlowFormStep(CONFIG_SCHEMA),
 }
 
 OPTIONS_FLOW = {
@@ -396,5 +385,8 @@ class SceneStateConfigFlowHandler(SchemaConfigFlowHandler, domain=DOMAIN):
 
     @override
     def async_config_entry_title(self, options: Mapping[str, Any]) -> str:
-        """Use the friendly name of the scene as the entry title."""
+        """Use the user's name for the entry, or the friendly name of the scene."""
+        name = options.get(CONF_NAME)
+        if isinstance(name, str) and name.strip():
+            return name
         return wrapped_entity_config_entry_title(self.hass, options[CONF_ENTITY_ID])

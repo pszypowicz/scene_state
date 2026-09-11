@@ -285,6 +285,33 @@ init  ── empty dropdown ──> write options, close
                                 └── no numeric field ──> init
 ```
 
+## Entity naming and duplicate helpers
+
+The entity name carries a fixed prefix, `Scene state <entry title>`. The entry
+title itself is not prefixed, because the Helpers page already shows the
+integration name next to it; the prefix only earns its keep in the entity
+picker, which lists every entity in the system without grouping by
+integration. With `_attr_has_entity_name` true and no device, Home Assistant
+slugifies the full name into the entity ID, so a scene titled `Movie` yields
+`binary_sensor.scene_state_movie`.
+
+The `user` step gains an optional `name` field. A non-empty, non-whitespace
+value becomes the entry title verbatim. A blank field falls back to
+`wrapped_entity_config_entry_title`, exactly as before the field existed. The
+name is stored in the entry options under `CONF_NAME`, which is why it joins
+`RESERVED_OPTION_KEYS`: a stored name is not a domain rule, even though
+`MatchProfile.from_options` would already skip it on its own, since the value
+is a string rather than a mapping. The options flow does not get a name field;
+a rename is already available from the config entry's own menu.
+
+**This reverses a decision from the 0.0.1 design**, which configured one
+config entry per scene and aborted a second user-flow submission for the same
+scene entity ID with `already_configured`. That abort, and the
+`already_configured` string in `strings.json` and `translations/en.json`, are
+gone. A scene can now carry more than one helper, for example one with a
+strict tolerance and one with a loose one, each named on the create form so
+their titles and entity IDs do not collide.
+
 ## Architecture
 
 One new module. The rest keep their current responsibilities.
@@ -386,7 +413,7 @@ never replaces its profile in place.
 CONF_COMPARE: Final = "compare"
 CONF_CONFIGURE: Final = "configure"
 RESERVED_OPTION_KEYS: Final = frozenset(
-    {CONF_ENTITY_ID, CONF_GRACE_PERIOD, CONF_DEBOUNCE, CONF_CONFIGURE}
+    {CONF_ENTITY_ID, CONF_NAME, CONF_GRACE_PERIOD, CONF_DEBOUNCE, CONF_CONFIGURE}
 )
 ```
 

@@ -6,18 +6,17 @@
         "description": "Create a binary sensor that is on while all entities in the scene match the scene.",
         "data": {
           "entity_id": "Scene",
+          "name": "Name",
           "grace_period": "Grace period after activation",
           "debounce": "Debounce for member updates"
         },
         "data_description": {
           "entity_id": "A scene defined in Home Assistant. Scenes from other integrations are not supported.",
+          "name": "Leave blank to name the helper after the scene. Set a name to run more than one helper on the same scene.",
           "grace_period": "Time to wait after the scene is activated before the members are compared.",
           "debounce": "Time to wait after a member changes before the members are compared."
         }
       }
-    },
-    "abort": {
-      "already_configured": "This scene is already tracked."
     }
   },
   "options": {

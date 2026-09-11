@@ -25,7 +25,7 @@ from custom_components.scene_state.const import (
     DOMAIN,
 )
 
-SENSOR_ENTITY_ID = "binary_sensor.movie"
+SENSOR_ENTITY_ID = "binary_sensor.scene_state_movie"
 MOVIE_SCENE = {
     "id": "movie",
     "name": "Movie",
@@ -78,7 +78,7 @@ async def test_sensor_is_on_when_members_match(hass: HomeAssistant) -> None:
     assert state.state == STATE_ON
     assert state.attributes["scene_entity_id"] == "scene.movie"
     assert state.attributes["mismatched_entities"] == []
-    assert state.attributes["friendly_name"] == "Movie"
+    assert state.attributes["friendly_name"] == "Scene state Movie"
 
 
 async def test_sensor_turns_off_after_debounce(

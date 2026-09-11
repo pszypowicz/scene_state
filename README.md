@@ -116,6 +116,14 @@ Click the button above to start the helper setup. Or start it by hand:
 2. Click Create helper and pick Scene State.
 3. Select a scene and adjust the grace period and the debounce if needed.
 
+The sensor is named `Scene state <scene>`, so all of them group together in
+the entity picker regardless of what the scene itself is called.
+
+You can create more than one helper for the same scene. Give each one a name
+on the create form to tell them apart, for example one with a tight tolerance
+and one with a loose one. Leaving the name blank titles the helper after the
+scene, as before.
+
 The helper options hold the timers and the comparison rules. The rules are per
 domain, and they apply to every member of that domain in the scene.
 

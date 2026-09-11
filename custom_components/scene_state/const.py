@@ -2,7 +2,12 @@
 
 from typing import Final
 
-from homeassistant.const import CONF_ENTITY_ID, STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.const import (
+    CONF_ENTITY_ID,
+    CONF_NAME,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+)
 
 DOMAIN: Final = "scene_state"
 
@@ -22,5 +27,5 @@ MAX_DEBOUNCE: Final = 60.0
 # A key that is not reserved and holds a mapping with a compare list is read as
 # a domain rule.
 RESERVED_OPTION_KEYS: Final = frozenset(
-    {CONF_ENTITY_ID, CONF_GRACE_PERIOD, CONF_DEBOUNCE, CONF_CONFIGURE}
+    {CONF_ENTITY_ID, CONF_NAME, CONF_GRACE_PERIOD, CONF_DEBOUNCE, CONF_CONFIGURE}
 )

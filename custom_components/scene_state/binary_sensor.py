@@ -34,7 +34,7 @@ class SceneStateBinarySensor(BinarySensorEntity):
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Create the tracker for the configured scene."""
         self._attr_unique_id = entry.entry_id
-        self._attr_name = entry.title
+        self._attr_name = f"Scene state {entry.title}"
         self._tracker = SceneTracker(
             hass,
             entry.options[CONF_ENTITY_ID],
