@@ -314,6 +314,12 @@ instance gets `binary_sensor.stan_sceny_movie`, while an English instance
 keeps `binary_sensor.scene_state_movie`. Tests run in English, so their
 entity ids are unaffected.
 
+The language decides the id only at creation. An existing registry row keeps
+its entity id when the interface language changes, so a single instance can
+hold ids in two languages, one set from before the change and one from after.
+This matches how every integration behaves, because the id belongs to the
+registry row rather than to the translation.
+
 The `user` step gains an optional `name` field. A non-empty, non-whitespace
 value becomes the entry title verbatim. A blank field falls back to
 `wrapped_entity_config_entry_title`, exactly as before the field existed. The

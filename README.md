@@ -141,6 +141,12 @@ Polish among them, their own entity ids instead of falling back to English,
 so a Polish instance gets an id such as `binary_sensor.stan_sceny_<title>`
 while an English one keeps `binary_sensor.scene_state_<title>`.
 
+An entity id is fixed when the entity is first created, and Home Assistant
+never derives it again. Changing the interface language later leaves your
+existing sensors alone, and only a helper you create after the change picks up
+the new language. So an id is safe to reference from a dashboard or an
+automation once it exists.
+
 ## Upgrading from 0.0.1
 
 Release 0.0.1 applied a built-in tolerance to numeric attributes such as
