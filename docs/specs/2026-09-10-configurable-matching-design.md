@@ -28,7 +28,7 @@ tolerance for any numeric one. No tolerance number ships in the code.
 
 ## Breaking change
 
-Release 0.0.1 applied built-in tolerances to fourteen attributes. After this
+Release 0.0.1 applied built-in tolerances to fifteen attributes. After this
 change the comparison is exact until the user sets a tolerance. Existing entries
 keep their options and change behavior on upgrade. A scene that reported `on`
 can report `off` after the upgrade.

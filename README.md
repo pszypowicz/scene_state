@@ -19,59 +19,67 @@ them drifts away.
 
 The helper reads the target states from the scene and compares them with the
 current entity states. It compares only the attributes that the scene stores,
-and it compares them exactly. A scene is set when every member matches
-perfectly.
+and it compares them exactly. The sensor is `on` when every member matches its
+target.
 
 Devices do not always report back the value that the scene asked for. A light
-converts a color through its own gamut, an integration that stores brightness as
-a percent returns 101 for 100, and a time based cover estimates its position. For
-each of those, set a tolerance in the helper options.
+converts a color through its own gamut. An integration that stores brightness
+as a percentage returns 101 when the scene asked for 100. A time-based cover
+estimates its position. For each of those, set a tolerance in the helper
+options.
 
-Two kinds of attribute never take part. Capability attributes, such as
-`supported_features` and `effect_list`, describe what an entity can do. For a
-light, only one color representation counts, because a light reports all of them
-at once and all of them derive from one value.
+Attributes that describe the entity rather than its state never take part.
+That covers capability attributes such as `supported_features` and
+`effect_list`, and presentation attributes such as `friendly_name` and
+`icon`. A light also drops every color representation except one, because it
+reports all of them at once and all of them derive from one value.
 
 If the target state is `off` or `closed`, attributes are ignored.
 
 Two timers keep the sensor stable:
 
-- The grace period starts when the scene is activated. Members are compared once
-  it ends, so transitions finish first. Default 5 seconds.
+- The grace period starts when the scene is activated. Members are compared
+  once it ends, so transitions finish first. While it runs, a member change
+  does not trigger a comparison. The default is 5 seconds.
 - The debounce starts when a member changes. Members are compared once no
-  further change arrives within it. Default 1 second.
+  further change arrives within it. The default is 1 second.
 
 ### When the sensor reports off
 
-Three different causes make the sensor report `off`, and each one needs its own
-repair.
+If you do not care about an attribute, clear it. Clearing every attribute of
+a domain compares the state string only, so a member in that domain only has
+to be on, open, or heating. Clearing is also the only repair for an attribute
+that drifts without limit. Examples are `media_position` and `media_title` on
+a media player, and `current_temperature` on a climate entity. A scene
+created by the `scene.create` service stores every attribute of a member,
+including these, and no tolerance can catch them.
 
-Clear the attribute when you do not care about it. This is also the only repair
-for an attribute that drifts without limit, such as `media_position` or
-`media_title` on a media player, or `current_temperature` on a climate entity.
-A scene created by the `scene.create` service stores every attribute of a
-member, including these, and no tolerance can catch them.
+If a value is close but not exact, set a tolerance. This is the case for
+brightness that a device converts to a percentage and back, for a color that
+a bulb converts through its own gamut, and for a cover that estimates its
+position.
 
-Set a tolerance when a value is close but not exact. This is the case for
-brightness that round-trips through a percent, a color a bulb converts through
-its own gamut, or a cover that estimates its position.
+Check `mismatched_entities` on the sensor to find the member at fault. If that
+member is loaded but does not report the attribute at all, it can never
+match, and a tolerance does not help. Clear the attribute instead. A member
+that is unavailable or missing is a different case. It does not appear in
+`mismatched_entities`, and the sensor reports `unknown` rather than `off`
+until that member comes back.
 
-Check the `mismatched_entities` attribute when a member is unavailable, or when
-its live state does not report the attribute at all. The suggested tolerance
-comes from the other members. Accepting it does not fix a member that is missing
-or unavailable, and raising the tolerance does not help either.
+To clear an attribute or set a tolerance, open the helper options. On the
+Helpers page, click the helper, then Configure.
 
-To clear an attribute or set a tolerance, open the helper options:
-
-1. Open the helper options.
-2. Pick the domain in the dropdown and submit.
-3. Clear any attribute that you do not care about, then submit.
-4. Read the measured difference in the description, accept the prefilled
-   tolerance, and submit.
+1. Pick the domain in the dropdown and submit. If no domain has anything to
+   compare, the dropdown does not appear, and submitting saves and closes.
+2. Clear any attribute that you do not care about, then submit.
+3. Read the measured difference in the step description.
+4. Accept the prefilled tolerance and submit. If the domain has no numeric
+   attribute, this step does not appear and you return to the first step.
 5. Leave the dropdown empty and submit to save.
 
 Each tolerance uses the scale of the attribute itself. Brightness is 0 to 255,
-color temperature is in kelvin, and a media player volume is 0 to 1.
+color temperature is in kelvin, and a media player volume is 0 to 1. A
+tolerance of `0` demands an exact match.
 
 ## Sensor states
 
@@ -113,10 +121,25 @@ domain, and they apply to every member of that domain in the scene.
 
 ## Upgrading from 0.0.1
 
-Release 0.0.1 applied built-in tolerances to fourteen attributes. Release 0.1.0
-compares exactly until you set a tolerance, so a sensor that reported `on` can
-report `off` after the upgrade. Your existing helpers keep their timers. Follow
-the steps under When the sensor reports off for each helper that turns off.
+Release 0.0.1 applied a built-in tolerance to numeric attributes such as
+brightness, cover position, and color. Release 0.1.0 compares exactly until
+you set a tolerance, so a sensor that reported `on` can report `off` after
+the upgrade.
+
+The attribute list also changed. Release 0.0.1 read a fixed per-domain list
+and ignored every other stored attribute, and a domain outside that list
+compared the state string only. Release 0.1.0 compares every non-metadata
+attribute that the scene stores, in every domain. A snapshot scene built with
+`scene.create` can now fail on an attribute such as `media_position` or
+`current_temperature`. Release 0.0.1 never looked at these, and clearing the
+attribute is the repair there.
+
+Release 0.0.1 also limited a desired color temperature to the range the light
+reported. That guard is gone. A scene asking for a kelvin outside a bulb's
+range now needs a tolerance, even for a light that matched before.
+
+Your existing helpers keep their timers. For each helper that turns off,
+follow the steps in [When the sensor reports off](#when-the-sensor-reports-off).
 
 ## Limitations
 
