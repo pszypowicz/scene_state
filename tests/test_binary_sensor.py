@@ -25,7 +25,7 @@ from custom_components.scene_state.const import (
     DOMAIN,
 )
 
-SENSOR_ENTITY_ID = "binary_sensor.movie"
+SENSOR_ENTITY_ID = "binary_sensor.scene_state_movie"
 MOVIE_SCENE = {
     "id": "movie",
     "name": "Movie",
@@ -78,7 +78,7 @@ async def test_sensor_is_on_when_members_match(hass: HomeAssistant) -> None:
     assert state.state == STATE_ON
     assert state.attributes["scene_entity_id"] == "scene.movie"
     assert state.attributes["mismatched_entities"] == []
-    assert state.attributes["friendly_name"] == "Movie"
+    assert state.attributes["friendly_name"] == "Scene state Movie"
 
 
 async def test_sensor_turns_off_after_debounce(
@@ -184,3 +184,28 @@ async def test_unload_with_pending_debounce_stops_tracker(
     state = hass.states.get(SENSOR_ENTITY_ID)
     assert state is not None
     assert state.state == STATE_UNAVAILABLE
+
+
+async def test_stored_tolerance_turns_the_sensor_on(hass: HomeAssistant) -> None:
+    """A tolerance in the entry options reaches the comparison."""
+    assert await async_setup_component(hass, "scene", {"scene": [MOVIE_SCENE]})
+    await hass.async_block_till_done()
+    hass.states.async_set("light.a", "on", {"brightness": 103})
+    hass.states.async_set("switch.b", "off")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Movie",
+        options={
+            CONF_ENTITY_ID: "scene.movie",
+            CONF_GRACE_PERIOD: 0.0,
+            CONF_DEBOUNCE: 0.0,
+            "light": {"compare": ["brightness"], "brightness": 3},
+        },
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get(SENSOR_ENTITY_ID)
+    assert state is not None
+    assert state.state == STATE_ON

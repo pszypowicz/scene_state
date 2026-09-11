@@ -2,19 +2,18 @@
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+import math
+from typing import Any, Self
 
 from homeassistant.core import State
+
+from .attributes import comparable, selection_name
+from .const import CONF_COMPARE, RESERVED_OPTION_KEYS
 
 type Comparator = Callable[[Any, Any], bool]
 
 STATES_WITHOUT_ATTRIBUTES: frozenset[str] = frozenset({"off", "closed"})
 FLOAT_MARGIN = 1e-9
-
-ATTR_COLOR_MODE = "color_mode"
-ATTR_COLOR_TEMP_KELVIN = "color_temp_kelvin"
-ATTR_MIN_COLOR_TEMP_KELVIN = "min_color_temp_kelvin"
-ATTR_MAX_COLOR_TEMP_KELVIN = "max_color_temp_kelvin"
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,144 +24,136 @@ class MatchResult:
     reason: str | None = None
 
 
-def _exact(wanted: Any, got: Any) -> bool:
-    return bool(wanted == got)
+def _finite_tolerance(number: float) -> float | None:
+    """Return the number as a usable tolerance, or None when it cannot serve as one.
+
+    A negative tolerance would make an exactly equal value mismatch, so it is
+    clamped to zero instead. A number too large to become a float raises
+    OverflowError on conversion, and `from_options` must never raise during
+    entry setup, so such a number is dropped instead of propagated.
+    """
+    try:
+        value = float(number)
+    except OverflowError:
+        return None
+    return max(0.0, value) if math.isfinite(value) else None
+
+
+@dataclass(frozen=True, slots=True)
+class MatchProfile:
+    """The comparison rules of one config entry.
+
+    A domain that is absent from `compare` has no stored selection, and every
+    comparable attribute of that domain counts. An empty selection is different,
+    and it compares the state string only.
+
+    The selection and the tolerance use different names for a light color
+    attribute. `compares` folds the attribute name through `selection_name`, so
+    every color representation shares one selection under "color". `tolerance`
+    looks up the raw attribute name instead, because `hs_color` and `xy_color`
+    do not share a scale and need separate numbers.
+    """
+
+    compare: Mapping[str, frozenset[str]]
+    tolerances: Mapping[str, Mapping[str, float]]
+
+    @classmethod
+    def from_options(cls, options: Mapping[str, Any]) -> Self:
+        """Read the per-domain rules from the options of a config entry."""
+        compare: dict[str, frozenset[str]] = {}
+        tolerances: dict[str, Mapping[str, float]] = {}
+        for key, value in options.items():
+            if key in RESERVED_OPTION_KEYS or not isinstance(value, Mapping):
+                continue
+            selection = value.get(CONF_COMPARE)
+            if not isinstance(selection, list | tuple):
+                continue
+            compare[key] = frozenset(str(name) for name in selection)
+            tolerances[key] = {
+                str(name): tolerance
+                for name, number in value.items()
+                if name != CONF_COMPARE
+                and isinstance(number, int | float)
+                and not isinstance(number, bool)
+                and (tolerance := _finite_tolerance(number)) is not None
+            }
+        return cls(compare, tolerances)
+
+    def compares(self, domain: str, attribute: str) -> bool:
+        """Return whether the attribute takes part in the comparison."""
+        selection = self.compare.get(domain)
+        if selection is None:
+            return True
+        return selection_name(attribute, domain) in selection
+
+    def tolerance(self, domain: str, attribute: str) -> float | None:
+        """Return the tolerance of the attribute, or None for an exact match."""
+        return self.tolerances.get(domain, {}).get(attribute)
 
 
 def _within(tolerance: float) -> Comparator:
     def compare(wanted: Any, got: Any) -> bool:
+        if isinstance(wanted, bool) or isinstance(got, bool):
+            # float(True) is 1.0, so a boolean would otherwise take the numeric
+            # path below and a tolerance of 1 would make True match False.
+            return bool(wanted == got)
         try:
             difference = abs(float(wanted) - float(got))
         except TypeError, ValueError:
-            return False
+            # A tolerance means nothing for a value that is not a number.
+            return bool(wanted == got)
         # Float subtraction can exceed the tolerance by a rounding error.
         return difference <= tolerance + FLOAT_MARGIN
 
     return compare
 
 
-def _sequence_within(tolerances: Sequence[float]) -> Comparator:
+def _sequence_within(tolerance: float) -> Comparator:
     def compare(wanted: Any, got: Any) -> bool:
         if isinstance(wanted, str) or isinstance(got, str):
             return False
         if not isinstance(wanted, Sequence) or not isinstance(got, Sequence):
             return False
-        if len(wanted) != len(tolerances) or len(got) != len(tolerances):
+        if len(wanted) != len(got):
             return False
+        inner = _within(tolerance)
         return all(
-            _within(tolerance)(wanted_item, got_item)
-            for wanted_item, got_item, tolerance in zip(
-                wanted, got, tolerances, strict=True
-            )
+            inner(wanted_item, got_item)
+            for wanted_item, got_item in zip(wanted, got, strict=True)
         )
 
     return compare
 
 
-ATTRIBUTE_RULES: dict[str, dict[str, Comparator]] = {
-    "light": {"brightness": _within(3), "effect": _exact},
-    "cover": {"current_position": _within(3), "current_tilt_position": _within(3)},
-    "fan": {
-        "percentage": _within(3),
-        "oscillating": _exact,
-        "direction": _exact,
-        "preset_mode": _exact,
-    },
-    "climate": {
-        "temperature": _within(0.5),
-        "target_temp_high": _within(0.5),
-        "target_temp_low": _within(0.5),
-        "preset_mode": _exact,
-        "fan_mode": _exact,
-        "swing_mode": _exact,
-    },
-    "media_player": {
-        "volume_level": _within(0.02),
-        "source": _exact,
-        "sound_mode": _exact,
-    },
-    "humidifier": {"humidity": _within(2), "mode": _exact},
-}
+def _comparator(wanted: Any, tolerance: float | None) -> Comparator:
+    """Return the comparator for one desired value.
 
-COLOR_MODE_ATTRIBUTES: dict[str, str] = {
-    "color_temp": ATTR_COLOR_TEMP_KELVIN,
-    "hs": "hs_color",
-    "xy": "xy_color",
-    "rgb": "rgb_color",
-    "rgbw": "rgbw_color",
-    "rgbww": "rgbww_color",
-}
-
-COLOR_ATTRIBUTE_ORDER: tuple[str, ...] = (
-    ATTR_COLOR_TEMP_KELVIN,
-    "hs_color",
-    "rgb_color",
-    "xy_color",
-    "rgbw_color",
-    "rgbww_color",
-)
-
-COLOR_COMPARATORS: dict[str, Comparator] = {
-    ATTR_COLOR_TEMP_KELVIN: _within(50),
-    "hs_color": _sequence_within((5, 5)),
-    "xy_color": _sequence_within((0.02, 0.02)),
-    "rgb_color": _sequence_within((5, 5, 5)),
-    "rgbw_color": _sequence_within((5, 5, 5, 5)),
-    "rgbww_color": _sequence_within((5, 5, 5, 5, 5)),
-}
+    A scene stores a color as a list, and a light reports it as a tuple, so a
+    non-string sequence compares element by element. An absent tolerance is a
+    margin of zero, which demands equality.
+    """
+    margin = 0.0 if tolerance is None else tolerance
+    if not isinstance(wanted, str) and isinstance(wanted, Sequence):
+        return _sequence_within(margin)
+    return _within(margin)
 
 
-def _select_color_attribute(desired: Mapping[str, Any]) -> str | None:
-    """Return the color attribute that carries the comparison, if any."""
-    color_mode = desired.get(ATTR_COLOR_MODE)
-    if color_mode is not None:
-        return COLOR_MODE_ATTRIBUTES.get(str(color_mode))
-    for attribute in COLOR_ATTRIBUTE_ORDER:
-        if desired.get(attribute) is not None:
-            return attribute
-    return None
-
-
-def _clamp_kelvin(wanted: Any, current: Mapping[str, Any]) -> Any:
-    """Clamp the desired kelvin value to the range the light reports."""
-    try:
-        value = float(wanted)
-    except TypeError, ValueError:
-        return wanted
-    low = current.get(ATTR_MIN_COLOR_TEMP_KELVIN)
-    high = current.get(ATTR_MAX_COLOR_TEMP_KELVIN)
-    if isinstance(low, int | float):
-        value = max(value, float(low))
-    if isinstance(high, int | float):
-        value = min(value, float(high))
-    return value
-
-
-def _rules_for(desired: State) -> dict[str, Comparator]:
-    rules = dict(ATTRIBUTE_RULES.get(desired.domain, {}))
-    if desired.domain == "light":
-        color_attribute = _select_color_attribute(desired.attributes)
-        if color_attribute is not None:
-            rules[color_attribute] = COLOR_COMPARATORS[color_attribute]
-    return rules
-
-
-def match_state(desired: State, current: State) -> MatchResult:
+def match_state(desired: State, current: State, profile: MatchProfile) -> MatchResult:
     """Return whether the current state satisfies the desired state."""
     if desired.state != current.state:
         return MatchResult(False, f"state: wanted {desired.state}, got {current.state}")
     if desired.state in STATES_WITHOUT_ATTRIBUTES:
         return MatchResult(True)
 
-    for attribute, compare in _rules_for(desired).items():
-        wanted = desired.attributes.get(attribute)
-        if wanted is None:
+    domain = desired.domain
+    for attribute in comparable(desired):
+        if not profile.compares(domain, attribute):
             continue
+        wanted = desired.attributes[attribute]
         got = current.attributes.get(attribute)
         if got is None:
             return MatchResult(False, f"{attribute}: wanted {wanted}, got nothing")
-        if attribute == ATTR_COLOR_TEMP_KELVIN:
-            wanted = _clamp_kelvin(wanted, current.attributes)
+        compare = _comparator(wanted, profile.tolerance(domain, attribute))
         if not compare(wanted, got):
             return MatchResult(False, f"{attribute}: wanted {wanted}, got {got}")
     return MatchResult(True)

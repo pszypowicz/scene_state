@@ -1,0 +1,12 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "scene_state": {
+        "default": "mdi:palette-outline",
+        "state": {
+          "on": "mdi:palette"
+        }
+      }
+    }
+  }
+}

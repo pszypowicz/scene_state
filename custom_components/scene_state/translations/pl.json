@@ -1,0 +1,58 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Dodaj stan sceny",
+        "description": "Utwórz czujnik binarny, który jest włączony, gdy wszystkie encje sceny odpowiadają scenie.",
+        "data": {
+          "entity_id": "Scena",
+          "name": "Nazwa",
+          "grace_period": "Czas oczekiwania po aktywacji",
+          "debounce": "Opóźnienie po zmianie elementu"
+        },
+        "data_description": {
+          "entity_id": "Scena zdefiniowana w Home Assistant. Sceny z innych integracji nie są obsługiwane.",
+          "name": "Pozostaw puste, aby nazwać pomocnika po scenie. Podaj nazwę, aby uruchomić więcej niż jednego pomocnika dla tej samej sceny.",
+          "grace_period": "Czas oczekiwania po aktywacji sceny przed porównaniem elementów.",
+          "debounce": "Czas oczekiwania po zmianie elementu przed porównaniem elementów."
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opcje stanu sceny",
+        "data": {
+          "grace_period": "Czas oczekiwania po aktywacji",
+          "debounce": "Opóźnienie po zmianie elementu",
+          "configure": "Skonfiguruj domenę"
+        },
+        "data_description": {
+          "grace_period": "Czas oczekiwania po aktywacji sceny przed porównaniem elementów.",
+          "debounce": "Czas oczekiwania po zmianie elementu przed porównaniem elementów.",
+          "configure": "Wybierz domenę, aby określić jej porównywane atrybuty. Pozostaw puste, aby zapisać i zamknąć."
+        }
+      },
+      "domain": {
+        "title": "Porównywane atrybuty",
+        "description": "Wybierz atrybuty, które muszą się zgadzać. Odznaczony atrybut jest pomijany, niezależnie od jego wartości.",
+        "data": {
+          "compare": "Porównuj"
+        }
+      },
+      "tolerances": {
+        "title": "Tolerancje",
+        "description": "Wartość 0 wymaga dokładnej zgodności. Każda tolerancja używa skali samego atrybutu. Zmierzona różnica w tej chwili: {measured}.",
+        "data": {}
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "scene_state": {
+        "name": "Stan sceny {scene}"
+      }
+    }
+  }
+}

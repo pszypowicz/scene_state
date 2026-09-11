@@ -1,6 +1,6 @@
 [project]
 name = "scene-state"
-version = "0.0.1"
+version = "0.1.0"
 description = "Home Assistant helper that tracks whether a scene is currently active"
 readme = "README.md"
 license = "MIT"
@@ -80,6 +80,7 @@ ignore = [
     "PLR0912",
     "PLR0913",
     "PLR0915",
+    "PLR0917",
     "PLR2004",
     "TRY003",
 ]

@@ -2,10 +2,13 @@
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/v/release/pszypowicz/scene_state)](https://github.com/pszypowicz/scene_state/releases)
+[![Home Assistant](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fpszypowicz%2Fscene_state%2Fmain%2Fhacs.json&query=%24.homeassistant&label=Home%20Assistant&color=41BDF5&prefix=%E2%89%A5)](https://www.home-assistant.io)
 [![CI](https://github.com/pszypowicz/scene_state/actions/workflows/ci.yml/badge.svg)](https://github.com/pszypowicz/scene_state/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/pszypowicz/scene_state)](LICENSE)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 [![Maintainer](https://img.shields.io/badge/maintainer-%40pszypowicz-blue.svg)](https://github.com/pszypowicz)
+
+[![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=pszypowicz&repository=scene_state&category=integration)
 
 A Home Assistant helper that answers one question for a scene: do all entities
 in the scene match the states that the scene defines?
@@ -18,37 +21,77 @@ them drifts away.
 ## How it works
 
 The helper reads the target states from the scene and compares them with the
-current entity states. It compares only the attributes that the scene defines,
-and it applies a tolerance to numeric attributes, because devices round values
-and report colors in their own representation.
+current entity states. It compares only the attributes that the scene stores,
+and it compares them exactly. The sensor is `on` when every member matches its
+target.
 
-| Domain | Compared attributes and tolerance |
-| --- | --- |
-| light | brightness within 3, one color representation (kelvin within 50, hue and saturation within 5, xy within 0.02, rgb channels within 5), effect exact |
-| cover | position and tilt within 3 |
-| fan | percentage within 3, oscillating, direction, and preset mode exact |
-| climate | target temperatures within 0.5, preset, fan, and swing mode exact |
-| media_player | volume within 0.02, source and sound mode exact |
-| humidifier | target humidity within 2, mode exact |
-| other | state only |
+Devices do not always report back the value that the scene asked for. A light
+converts a color through its own gamut. An integration that stores brightness
+as a percentage returns 101 when the scene asked for 100. A time-based cover
+estimates its position. For each of those, set a tolerance in the helper
+options.
+
+Attributes that describe the entity rather than its state never take part.
+That covers capability attributes such as `supported_features` and
+`effect_list`, and presentation attributes such as `friendly_name` and
+`icon`. A light also drops every color representation except one, because it
+reports all of them at once and all of them derive from one value.
 
 If the target state is `off` or `closed`, attributes are ignored.
 
 Two timers keep the sensor stable:
 
-- The grace period starts when the scene is activated. Members are compared once
-  it ends, so transitions finish first. Default 5 seconds.
+- The grace period starts when the scene is activated. Members are compared
+  once it ends, so transitions finish first. While it runs, a member change
+  does not trigger a comparison. The default is 5 seconds.
 - The debounce starts when a member changes. Members are compared once no
-  further change arrives within it. Default 1 second.
+  further change arrives within it. The default is 1 second.
+
+### When the sensor reports off
+
+If you do not care about an attribute, clear it. Clearing every attribute of
+a domain compares the state string only, so a member in that domain only has
+to be on, open, or heating. Clearing is also the only repair for an attribute
+that drifts without limit. Examples are `media_position` and `media_title` on
+a media player, and `current_temperature` on a climate entity. A scene
+created by the `scene.create` service stores every attribute of a member,
+including these, and no tolerance can catch them.
+
+If a value is close but not exact, set a tolerance. This is the case for
+brightness that a device converts to a percentage and back, for a color that
+a bulb converts through its own gamut, and for a cover that estimates its
+position.
+
+Check `mismatched_entities` on the sensor to find the member at fault. If that
+member is loaded but does not report the attribute at all, it can never
+match, and a tolerance does not help. Clear the attribute instead. A member
+that is unavailable or missing is a different case. It does not appear in
+`mismatched_entities`, and as long as no other member mismatches, the sensor
+reports `unknown` rather than `off` until that member comes back.
+
+To clear an attribute or set a tolerance, open the helper options. On the
+Helpers page, click the helper, then Configure.
+
+1. Pick the domain in the dropdown and submit. If no domain has anything to
+   compare, the dropdown does not appear, and submitting saves and closes.
+2. Clear any attribute that you do not care about, then submit.
+3. Read the measured difference in the step description.
+4. Accept the prefilled tolerance and submit. If the domain has no numeric
+   attribute, this step does not appear and you return to the first step.
+5. Leave the dropdown empty and submit to save.
+
+Each tolerance uses the scale of the attribute itself. Brightness is 0 to 255,
+color temperature is in kelvin, and a media player volume is 0 to 1. A
+tolerance of `0` demands an exact match.
 
 ## Sensor states
 
-| State | Meaning |
-| --- | --- |
-| `on` | every member matches |
-| `off` | at least one member does not match |
-| `unknown` | no member mismatches, but at least one is unavailable or missing |
-| `unavailable` | the scene entity is not loaded |
+| State         | Meaning                                                          |
+| ------------- | ---------------------------------------------------------------- |
+| `on`          | every member matches                                             |
+| `off`         | at least one member does not match                               |
+| `unknown`     | no member mismatches, but at least one is unavailable or missing |
+| `unavailable` | the scene entity is not loaded                                   |
 
 Attributes:
 
@@ -57,9 +100,8 @@ Attributes:
 
 ## Installation
 
-[![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=pszypowicz&repository=scene_state&category=integration)
-
-Click the button above to open the repository in HACS. Or add it by hand:
+Click the HACS badge at the top of this page to open the repository in HACS. Or
+add it by hand:
 
 1. In HACS, open the menu in the top right, then Custom repositories.
 2. Add `https://github.com/pszypowicz/scene_state` with category Integration.
@@ -76,7 +118,65 @@ Click the button above to start the helper setup. Or start it by hand:
 2. Click Create helper and pick Scene State.
 3. Select a scene and adjust the grace period and the debounce if needed.
 
-Both timers can be changed later from the helper options.
+The sensor is named `Scene state <title>`, where the title is the scene's own
+name unless you set one on the create form, so every one of them groups
+together in the entity picker regardless of what the scene itself is called.
+
+You can create more than one helper for the same scene. Give each one a name
+on the create form to tell them apart, for example one with a tight tolerance
+and one with a loose one. Leaving the name blank titles the helper after the
+scene, as before.
+
+Renaming a helper later, from its menu on the Helpers page, changes the
+title. The entity id never changes, and the sensor's displayed name does not
+pick up the new title until the entry reloads.
+
+The helper options hold the timers and the comparison rules. The rules are per
+domain, and they apply to every member of that domain in the scene.
+
+## Localization
+
+Scene State ships English and Polish. The sensor's displayed name is
+translated, so a Polish Home Assistant shows `Stan sceny <title>` where an
+English one shows `Scene state <title>`. Home Assistant gives some languages,
+Polish among them, their own entity ids instead of falling back to English,
+so a Polish instance gets an id such as `binary_sensor.stan_sceny_<title>`
+while an English one keeps `binary_sensor.scene_state_<title>`.
+
+An entity id is fixed when the entity is first created, and Home Assistant
+never derives it again. Changing the interface language later leaves your
+existing sensors alone, and only a helper you create after the change picks up
+the new language. So an id is safe to reference from a dashboard or an
+automation once it exists.
+
+## Upgrading from 0.0.1
+
+Release 0.0.1 applied a built-in tolerance to numeric attributes such as
+brightness, cover position, and color. Release 0.1.0 compares exactly until
+you set a tolerance, so a sensor that reported `on` can report `off` after
+the upgrade.
+
+The attribute list also changed. Release 0.0.1 read a fixed per-domain list
+and ignored every other stored attribute, and a domain outside that list
+compared the state string only. Release 0.1.0 compares every non-metadata
+attribute that the scene stores, in every domain. A snapshot scene built with
+`scene.create` can now fail on an attribute such as `media_position` or
+`current_temperature`. Release 0.0.1 never looked at these, and clearing the
+attribute is the repair there.
+
+Release 0.0.1 also limited a desired color temperature to the range the light
+reported. That guard is gone. A scene asking for a kelvin outside a bulb's
+range now needs a tolerance, even for a light that matched before.
+
+Release 0.1.0 also prefixes the sensor's name. A helper created before this
+release keeps its old entity id, because upgrading never renames an entity.
+Its displayed name does pick up the new `Scene state <title>` form, so the
+name and the entity id no longer match for that helper. Delete and recreate
+the helper to get an entity id in the new form. Recreating is safe as long as
+nothing, no automation, script, or dashboard, still refers to the old id.
+
+Your existing helpers keep their timers. For each helper that turns off,
+follow the steps in [When the sensor reports off](#when-the-sensor-reports-off).
 
 ## Limitations
 

@@ -6,31 +6,52 @@
         "description": "Create a binary sensor that is on while all entities in the scene match the scene.",
         "data": {
           "entity_id": "Scene",
+          "name": "Name",
           "grace_period": "Grace period after activation",
           "debounce": "Debounce for member updates"
         },
         "data_description": {
           "entity_id": "A scene defined in Home Assistant. Scenes from other integrations are not supported.",
+          "name": "Leave blank to name the helper after the scene. Set a name to run more than one helper on the same scene.",
           "grace_period": "Time to wait after the scene is activated before the members are compared.",
           "debounce": "Time to wait after a member changes before the members are compared."
         }
       }
-    },
-    "abort": {
-      "already_configured": "This scene is already tracked."
     }
   },
   "options": {
     "step": {
       "init": {
+        "title": "Scene state options",
         "data": {
           "grace_period": "Grace period after activation",
-          "debounce": "Debounce for member updates"
+          "debounce": "Debounce for member updates",
+          "configure": "Configure a domain"
         },
         "data_description": {
           "grace_period": "Time to wait after the scene is activated before the members are compared.",
-          "debounce": "Time to wait after a member changes before the members are compared."
+          "debounce": "Time to wait after a member changes before the members are compared.",
+          "configure": "Pick a domain to choose its compared attributes. Leave it empty to save and close."
         }
+      },
+      "domain": {
+        "title": "Compared attributes",
+        "description": "Pick the attributes that must match. An attribute that you clear is ignored, whatever its value.",
+        "data": {
+          "compare": "Compare"
+        }
+      },
+      "tolerances": {
+        "title": "Tolerances",
+        "description": "A value of 0 demands an exact match. Each tolerance uses the scale of the attribute itself. Measured difference right now: {measured}.",
+        "data": {}
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "scene_state": {
+        "name": "Scene state {scene}"
       }
     }
   }

@@ -1,13 +1,25 @@
 """Tests for the state matching rules."""
 
+from typing import Any
+
 from homeassistant.core import State
 import pytest
 
-from custom_components.scene_state.matching import MatchResult, match_state
+from custom_components.scene_state.matching import (
+    MatchProfile,
+    MatchResult,
+    match_state,
+)
+
+EXACT = MatchProfile.from_options({})
 
 
-def _light(state: str, **attributes: object) -> State:
+def _light(state: str, **attributes: Any) -> State:
     return State("light.test", state, attributes)
+
+
+def _profile(domain: str, compare: list[str], **tolerances: float) -> MatchProfile:
+    return MatchProfile.from_options({domain: {"compare": compare, **tolerances}})
 
 
 @pytest.mark.parametrize(
@@ -33,15 +45,15 @@ def _light(state: str, **attributes: object) -> State:
         ),
         pytest.param(
             _light("on", brightness=200),
-            _light("on", brightness=203),
+            _light("on", brightness=200),
             MatchResult(True),
-            id="brightness_within_tolerance",
+            id="equal_brightness_matches",
         ),
         pytest.param(
             _light("on", brightness=200),
-            _light("on", brightness=204),
-            MatchResult(False, "brightness: wanted 200, got 204"),
-            id="brightness_outside_tolerance",
+            _light("on", brightness=201),
+            MatchResult(False, "brightness: wanted 200, got 201"),
+            id="brightness_off_by_one_is_mismatch",
         ),
         pytest.param(
             _light("on", brightness=200),
@@ -56,29 +68,17 @@ def _light(state: str, **attributes: object) -> State:
             id="none_desired_ignored",
         ),
         pytest.param(
-            _light("on", brightness="abc"),
-            _light("on", brightness=10),
-            MatchResult(False, "brightness: wanted abc, got 10"),
-            id="malformed_value_is_mismatch",
-        ),
-        pytest.param(
             _light(
                 "on", color_mode="color_temp", color_temp_kelvin=2700, hs_color=[30, 40]
             ),
             _light(
                 "on",
                 color_mode="color_temp",
-                color_temp_kelvin=2750,
+                color_temp_kelvin=2700,
                 hs_color=[200, 90],
             ),
             MatchResult(True),
-            id="kelvin_within_tolerance_ignores_hs",
-        ),
-        pytest.param(
-            _light("on", color_mode="color_temp", color_temp_kelvin=2700),
-            _light("on", color_mode="color_temp", color_temp_kelvin=2751),
-            MatchResult(False, "color_temp_kelvin: wanted 2700.0, got 2751"),
-            id="kelvin_outside_tolerance",
+            id="selected_representation_ignores_the_rest",
         ),
         pytest.param(
             _light("on", color_mode="color_temp", color_temp_kelvin=2000),
@@ -89,74 +89,20 @@ def _light(state: str, **attributes: object) -> State:
                 min_color_temp_kelvin=2200,
                 max_color_temp_kelvin=6500,
             ),
-            MatchResult(True),
-            id="kelvin_clamped_to_light_range",
+            MatchResult(False, "color_temp_kelvin: wanted 2000, got 2200"),
+            id="kelvin_is_not_clamped",
         ),
         pytest.param(
             _light("on", color_mode="hs", hs_color=[30, 40]),
-            _light("on", color_mode="hs", hs_color=[35, 45]),
+            _light("on", color_mode="hs", hs_color=(30.0, 40.0)),
             MatchResult(True),
-            id="hs_within_tolerance",
+            id="equal_sequence_across_types_matches",
         ),
         pytest.param(
             _light("on", color_mode="hs", hs_color=[30, 40]),
-            _light("on", color_mode="hs", hs_color=[36, 40]),
-            MatchResult(False, "hs_color: wanted [30, 40], got [36, 40]"),
-            id="hs_outside_tolerance",
-        ),
-        pytest.param(
-            _light("on", color_mode="xy", xy_color=[0.3, 0.3]),
-            _light("on", color_mode="xy", xy_color=[0.31, 0.29]),
-            MatchResult(True),
-            id="xy_within_tolerance",
-        ),
-        pytest.param(
-            _light("on", color_mode="xy", xy_color=[0.3, 0.3]),
-            _light("on", color_mode="xy", xy_color=[0.33, 0.3]),
-            MatchResult(False, "xy_color: wanted [0.3, 0.3], got [0.33, 0.3]"),
-            id="xy_outside_tolerance",
-        ),
-        pytest.param(
-            _light("on", color_mode="rgb", rgb_color=[255, 0, 0]),
-            _light("on", color_mode="rgb", rgb_color=[250, 5, 3]),
-            MatchResult(True),
-            id="rgb_within_tolerance",
-        ),
-        pytest.param(
-            _light("on", color_mode="rgb", rgb_color=[255, 0, 0]),
-            _light("on", color_mode="rgb", rgb_color=[249, 0, 0]),
-            MatchResult(False, "rgb_color: wanted [255, 0, 0], got [249, 0, 0]"),
-            id="rgb_outside_tolerance",
-        ),
-        pytest.param(
-            _light("on", color_mode="rgbww", rgbww_color=[10, 20, 30, 40, 50]),
-            _light("on", color_mode="rgbww", rgbww_color=[15, 25, 35, 45, 55]),
-            MatchResult(True),
-            id="rgbww_within_tolerance",
-        ),
-        pytest.param(
-            _light("on", color_mode="rgbw", rgbw_color=[10, 20, 30, 40]),
-            _light("on", color_mode="rgbw", rgbw_color=(15, 25, 35, 45)),
-            MatchResult(True),
-            id="rgbw_tuple_within_tolerance",
-        ),
-        pytest.param(
-            _light("on", color_mode="hs", hs_color=[30, 40]),
-            _light("on", color_mode="hs", hs_color=(31.0, 41.0)),
-            MatchResult(True),
-            id="hs_tuple_current_within_tolerance",
-        ),
-        pytest.param(
-            _light("on", color_temp_kelvin=2700, hs_color=[30, 40]),
-            _light("on", color_temp_kelvin=2720, hs_color=[200, 90]),
-            MatchResult(True),
-            id="no_color_mode_prefers_kelvin",
-        ),
-        pytest.param(
-            _light("on", hs_color=[30, 40], xy_color=[0.9, 0.9]),
-            _light("on", hs_color=[31, 41], xy_color=[0.1, 0.1]),
-            MatchResult(True),
-            id="no_color_mode_prefers_hs_over_xy",
+            _light("on", color_mode="hs", hs_color=[30]),
+            MatchResult(False, "hs_color: wanted [30, 40], got [30]"),
+            id="sequence_length_mismatch",
         ),
         pytest.param(
             _light("on", color_mode="hs", hs_color=[30, 40]),
@@ -171,87 +117,215 @@ def _light(state: str, **attributes: object) -> State:
             id="white_mode_compares_no_color",
         ),
         pytest.param(
-            _light("on", color_mode="hs", hs_color=[30]),
-            _light("on", color_mode="hs", hs_color=[30, 40]),
-            MatchResult(False, "hs_color: wanted [30], got [30, 40]"),
-            id="list_length_mismatch",
-        ),
-        pytest.param(
             _light("on", effect="rainbow"),
             _light("on", effect="Rainbow"),
             MatchResult(False, "effect: wanted rainbow, got Rainbow"),
             id="effect_exact",
         ),
         pytest.param(
-            State("cover.test", "open", {"current_position": 50}),
-            State("cover.test", "open", {"current_position": 47}),
-            MatchResult(True),
-            id="cover_position_within_tolerance",
-        ),
-        pytest.param(
-            State("cover.test", "open", {"current_position": 50}),
-            State("cover.test", "open", {"current_position": 46}),
-            MatchResult(False, "current_position: wanted 50, got 46"),
-            id="cover_position_outside_tolerance",
-        ),
-        pytest.param(
-            State("fan.test", "on", {"percentage": 33, "oscillating": True}),
-            State("fan.test", "on", {"percentage": 35, "oscillating": True}),
-            MatchResult(True),
-            id="fan_within_tolerance",
-        ),
-        pytest.param(
-            State("fan.test", "on", {"oscillating": True}),
-            State("fan.test", "on", {"oscillating": False}),
-            MatchResult(False, "oscillating: wanted True, got False"),
-            id="fan_oscillating_exact",
-        ),
-        pytest.param(
-            State("climate.test", "heat", {"temperature": 21}),
-            State(
-                "climate.test", "heat", {"temperature": 21.5, "current_temperature": 15}
-            ),
-            MatchResult(True),
-            id="climate_target_within_tolerance",
-        ),
-        pytest.param(
-            State("climate.test", "heat", {"temperature": 21}),
-            State("climate.test", "heat", {"temperature": 21.6}),
-            MatchResult(False, "temperature: wanted 21, got 21.6"),
-            id="climate_target_outside_tolerance",
-        ),
-        pytest.param(
-            State("media_player.test", "playing", {"volume_level": 0.3}),
-            State("media_player.test", "playing", {"volume_level": 0.32}),
-            MatchResult(True),
-            id="volume_within_tolerance",
-        ),
-        pytest.param(
-            State("media_player.test", "playing", {"volume_level": 0.3}),
-            State("media_player.test", "playing", {"volume_level": 0.33}),
-            MatchResult(False, "volume_level: wanted 0.3, got 0.33"),
-            id="volume_outside_tolerance",
-        ),
-        pytest.param(
-            State("humidifier.test", "on", {"humidity": 50, "mode": "auto"}),
-            State("humidifier.test", "on", {"humidity": 52, "mode": "auto"}),
-            MatchResult(True),
-            id="humidifier_within_tolerance",
-        ),
-        pytest.param(
-            State("switch.test", "on", {"brightness": 1}),
-            State("switch.test", "on", {"brightness": 999}),
-            MatchResult(True),
-            id="domain_without_rules_compares_state_only",
+            State("switch.test", "on", {"custom": 1}),
+            State("switch.test", "on", {"custom": 999}),
+            MatchResult(False, "custom: wanted 1, got 999"),
+            id="any_domain_compares_its_attributes",
         ),
         pytest.param(
             _light("on", brightness=10, friendly_name="Desired", supported_features=1),
             _light("on", brightness=10, friendly_name="Current", supported_features=2),
             MatchResult(True),
-            id="unknown_attributes_ignored",
+            id="metadata_ignored",
+        ),
+        pytest.param(
+            State("fan.test", "on", {"oscillating": True}),
+            State("fan.test", "on", {"oscillating": False}),
+            MatchResult(False, "oscillating: wanted True, got False"),
+            id="oscillating_exact",
+        ),
+        pytest.param(
+            _light("on", brightness="abc"),
+            _light("on", brightness=10),
+            MatchResult(False, "brightness: wanted abc, got 10"),
+            id="non_numeric_desired_against_a_number",
+        ),
+        pytest.param(
+            State("climate.test", "heat", {"temperature": 21}),
+            State(
+                "climate.test", "heat", {"temperature": 21, "current_temperature": 15}
+            ),
+            MatchResult(True),
+            id="extra_current_attribute_ignored",
+        ),
+        pytest.param(
+            _light("on", brightness=200.5),
+            _light("on", brightness=201.5),
+            MatchResult(False, "brightness: wanted 200.5, got 201.5"),
+            id="reason_renders_a_float",
+        ),
+        pytest.param(
+            State("switch.test", "on", {"custom": "100"}),
+            State("switch.test", "on", {"custom": 100}),
+            MatchResult(True),
+            id="quoted_number_matches_numeric_value",
         ),
     ],
 )
-def test_match_state(desired: State, current: State, expected: MatchResult) -> None:
-    """Compare a desired scene state with a current entity state."""
-    assert match_state(desired, current) == expected
+def test_exact_profile(desired: State, current: State, expected: MatchResult) -> None:
+    """Without stored rules every comparable attribute compares exactly."""
+    assert match_state(desired, current, EXACT) == expected
+
+
+@pytest.mark.parametrize(
+    ("desired", "current", "profile", "expected"),
+    [
+        pytest.param(
+            _light("on", brightness=200),
+            _light("on", brightness=203),
+            _profile("light", ["brightness"], brightness=3),
+            MatchResult(True),
+            id="tolerance_boundary_is_inclusive",
+        ),
+        pytest.param(
+            _light("on", brightness=200),
+            _light("on", brightness=204),
+            _profile("light", ["brightness"], brightness=3),
+            MatchResult(False, "brightness: wanted 200, got 204"),
+            id="tolerance_outside",
+        ),
+        pytest.param(
+            _light("on", brightness=200, effect="rainbow"),
+            _light("on", brightness=200, effect="none"),
+            _profile("light", ["brightness"]),
+            MatchResult(True),
+            id="unselected_attribute_ignored",
+        ),
+        pytest.param(
+            _light("on", brightness=200),
+            _light("on", brightness=1),
+            _profile("light", []),
+            MatchResult(True),
+            id="empty_selection_compares_state_only",
+        ),
+        pytest.param(
+            _light("on", color_mode="hs", hs_color=[30, 40]),
+            _light("on", color_mode="hs", hs_color=[33, 44]),
+            _profile("light", ["color"], hs_color=4),
+            MatchResult(True),
+            id="color_selection_covers_the_representation",
+        ),
+        pytest.param(
+            _light("on", color_mode="hs", hs_color=[30, 40]),
+            _light("on", color_mode="hs", hs_color=[99, 99]),
+            _profile("light", ["brightness"]),
+            MatchResult(True),
+            id="color_not_selected_is_ignored",
+        ),
+        pytest.param(
+            _light("on", effect="rainbow"),
+            _light("on", effect="none"),
+            _profile("light", ["effect"], effect=5),
+            MatchResult(False, "effect: wanted rainbow, got none"),
+            id="tolerance_on_a_string_falls_back_to_equality_and_mismatches",
+        ),
+        pytest.param(
+            _light("on", effect="rainbow"),
+            _light("on", effect="rainbow"),
+            _profile("light", ["effect"], effect=5),
+            MatchResult(True),
+            id="tolerance_on_a_string_falls_back_to_equality_and_matches",
+        ),
+        pytest.param(
+            State("cover.test", "open", {"current_position": 70}),
+            State("cover.test", "open", {"current_position": 68}),
+            _profile("cover", ["current_position"], current_position=2),
+            MatchResult(True),
+            id="cover_tolerance",
+        ),
+        pytest.param(
+            State("media_player.test", "playing", {"volume_level": 0.3}),
+            State("media_player.test", "playing", {"volume_level": 0.32}),
+            _profile("media_player", ["volume_level"], volume_level=0.02),
+            MatchResult(True),
+            id="float_tolerance_survives_rounding",
+        ),
+        pytest.param(
+            _light("on", brightness=200),
+            _light("on", brightness=204),
+            _profile("cover", ["current_position"], current_position=99),
+            MatchResult(False, "brightness: wanted 200, got 204"),
+            id="another_domain_does_not_leak",
+        ),
+        pytest.param(
+            State("fan.test", "on", {"oscillating": True}),
+            State("fan.test", "on", {"oscillating": False}),
+            _profile("fan", ["oscillating"], oscillating=1),
+            MatchResult(False, "oscillating: wanted True, got False"),
+            id="tolerance_does_not_bridge_a_boolean",
+        ),
+        pytest.param(
+            _light("on", color_mode="rgb", rgb_color=[10, 20, 30]),
+            _light("on", color_mode="rgb", rgb_color=[12, 18, 33]),
+            _profile("light", ["color"], rgb_color=5),
+            MatchResult(True),
+            id="rgb_color_tolerance",
+        ),
+        pytest.param(
+            _light("on", color_mode="rgbw", rgbw_color=[10, 20, 30, 40]),
+            _light("on", color_mode="rgbw", rgbw_color=[12, 18, 33, 44]),
+            _profile("light", ["color"], rgbw_color=5),
+            MatchResult(True),
+            id="rgbw_color_tolerance",
+        ),
+        pytest.param(
+            _light("on", color_mode="rgbww", rgbww_color=[10, 20, 30, 40, 50]),
+            _light("on", color_mode="rgbww", rgbww_color=[12, 18, 33, 44, 47]),
+            _profile("light", ["color"], rgbww_color=5),
+            MatchResult(True),
+            id="rgbww_color_tolerance",
+        ),
+    ],
+)
+def test_stored_profile(
+    desired: State, current: State, profile: MatchProfile, expected: MatchResult
+) -> None:
+    """Stored rules select the attributes and widen the comparison."""
+    assert match_state(desired, current, profile) == expected
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        pytest.param({}, id="empty"),
+        pytest.param({"entity_id": "scene.a"}, id="reserved_key"),
+        pytest.param({"grace_period": 5.0, "debounce": 1.0}, id="reserved_numbers"),
+        pytest.param({"light": "not a mapping"}, id="value_is_not_a_mapping"),
+        pytest.param({"light": {"brightness": 3}}, id="mapping_without_compare"),
+    ],
+)
+def test_from_options_ignores_unusable_keys(options: dict[str, Any]) -> None:
+    """An option that is not a domain rule leaves the profile empty."""
+    profile = MatchProfile.from_options(options)
+    assert profile.compare == {}
+    assert profile.compares("light", "brightness") is True
+    assert profile.tolerance("light", "brightness") is None
+
+
+def test_from_options_reads_a_domain_rule() -> None:
+    """A domain mapping yields a selection and its tolerances."""
+    profile = MatchProfile.from_options(
+        {
+            "entity_id": "scene.a",
+            "light": {"compare": ["brightness", "color"], "brightness": 4},
+        }
+    )
+    assert profile.compare == {"light": frozenset({"brightness", "color"})}
+    assert profile.tolerance("light", "brightness") == 4.0
+    assert profile.tolerance("light", "hs_color") is None
+    assert profile.compares("light", "hs_color") is True
+    assert profile.compares("light", "effect") is False
+
+
+def test_boolean_tolerance_is_excluded() -> None:
+    """A boolean stored as a number does not become a tolerance."""
+    profile = MatchProfile.from_options(
+        {"light": {"compare": ["brightness"], "brightness": True}}
+    )
+    assert profile.tolerance("light", "brightness") is None
