@@ -189,7 +189,9 @@ means compare every comparable attribute exactly, so an entry from 0.0.1 needs
 no migration. The config entry version stays at 1.1.
 
 `from_options` treats a top level key as a domain only when the key is not
-reserved and the value is a mapping. An unknown key of another type is ignored.
+reserved, the value is a mapping, and that mapping holds a `compare` key whose
+value is a list or a tuple. A mapping without one is ignored, exactly like an
+absent key.
 
 ## Options flow
 
@@ -231,11 +233,9 @@ step.
 | `compare` | select, multiple, list mode |
 
 The options are the comparable attribute names of that domain, as the union over
-its members, with `color` in place of any selected color representation. The
-labels come from `strings.json` through a `translation_key`. Any domain can
-appear, so the label set is open. The implementation must confirm that the
-frontend shows the raw attribute name when a label is absent, and must build the
-labels in code if it does not.
+its members, with `color` in place of any selected color representation. Any
+domain can appear, so the label set is open and cannot live in a translation
+file. The labels are built in code from the attribute name, through `_label`.
 
 `suggested_values` returns the stored `compare` list when the entry holds one,
 and every option otherwise. So a first visit arrives with everything checked,
@@ -437,9 +437,9 @@ RESERVED_OPTION_KEYS: Final = frozenset(
   states that the comparison is exact, that the scene supplies the attribute
   list, and how to set a tolerance. The Configuration section gains the three
   steps.
-- `strings.json` and `translations/en.json`. Three steps, the attribute labels
-  for the `compare` selector, and the measurement placeholder on the tolerances
-  step.
+- `strings.json` and `translations/en.json`. Three steps and the measurement
+  placeholder on the tolerances step. No attribute name, because the label set
+  of the `compare` selector is open and is built in code instead.
 - `manifest.json`. The version becomes 0.1.0.
 - The release notes carry the breaking-change note from the section above.
 
