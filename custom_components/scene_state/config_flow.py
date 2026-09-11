@@ -237,10 +237,9 @@ def _measurements(
             continue
         # match_state rejects on the state string before it reads any
         # attribute, and it matches a desired state of off or closed without
-        # reading one at all, so an attribute difference is meaningless while
+        # reading one at all. So an attribute difference is meaningless while
         # the states differ, and irrelevant when the desired state makes
-        # attributes moot; neither member could ever benefit from a
-        # tolerance here.
+        # attributes moot, because no tolerance can help either member.
         if current.state != desired.state:
             continue
         if desired.state in STATES_WITHOUT_ATTRIBUTES:
