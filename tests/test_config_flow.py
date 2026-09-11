@@ -174,6 +174,19 @@ SHARED_NAME_OPTIONS = {
     CONF_DEBOUNCE: 1.0,
 }
 
+CLOSED_COVER_SCENE = {
+    "name": "ClosedCover",
+    "entities": {
+        "light.a": {"state": "on", "brightness": 100},
+        "cover.b": {"state": "closed", "current_position": 0},
+    },
+}
+CLOSED_COVER_OPTIONS = {
+    CONF_ENTITY_ID: "scene.closedcover",
+    CONF_GRACE_PERIOD: 5.0,
+    CONF_DEBOUNCE: 1.0,
+}
+
 
 async def _open_color_options(
     hass: HomeAssistant,
@@ -563,6 +576,40 @@ async def test_tolerances_skip_a_member_in_the_wrong_state(
     hass.states.async_set("cover.b", "closed", {"current_position": 0})
     _entry, result = await _open_options(hass)
 
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {CONF_GRACE_PERIOD: 5.0, CONF_DEBOUNCE: 1.0, CONF_CONFIGURE: "cover"},
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_COMPARE: ["current_position"]}
+    )
+
+    assert result["step_id"] == "tolerances"
+    assert _suggested(result, "current_position") == 0.0
+    assert result["description_placeholders"]["measured"] == "none"
+
+
+async def test_tolerances_skip_a_member_whose_state_ignores_attributes(
+    hass: HomeAssistant,
+) -> None:
+    """A desired state of off or closed matches without reading any attribute.
+
+    match_state never calls the comparator for such a member, so its
+    attribute difference must not widen the suggested tolerance for the
+    rest of the domain either.
+    """
+    assert await async_setup_component(hass, "scene", {"scene": [CLOSED_COVER_SCENE]})
+    await hass.async_block_till_done()
+    hass.states.async_set("light.a", "on", {"brightness": 100})
+    hass.states.async_set("cover.b", "closed", {"current_position": 40})
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="ClosedCover", options=CLOSED_COVER_OPTIONS
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {CONF_GRACE_PERIOD: 5.0, CONF_DEBOUNCE: 1.0, CONF_CONFIGURE: "cover"},

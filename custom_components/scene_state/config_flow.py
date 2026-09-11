@@ -28,6 +28,7 @@ from .const import (
     MAX_GRACE_PERIOD,
     UNKNOWN_STATES,
 )
+from .matching import STATES_WITHOUT_ATTRIBUTES
 from .scene_source import get_scene_targets
 
 _LOGGER = logging.getLogger(__name__)
@@ -234,11 +235,15 @@ def _measurements(
         current = hass.states.get(entity_id)
         if current is None or current.state in UNKNOWN_STATES:
             continue
+        # match_state rejects on the state string before it reads any
+        # attribute, and it matches a desired state of off or closed without
+        # reading one at all, so an attribute difference is meaningless while
+        # the states differ, and irrelevant when the desired state makes
+        # attributes moot; neither member could ever benefit from a
+        # tolerance here.
         if current.state != desired.state:
-            # match_state rejects on the state string before it reads any
-            # attribute, so an attribute difference is meaningless while the
-            # states differ, and such a member could never match regardless
-            # of the tolerance.
+            continue
+        if desired.state in STATES_WITHOUT_ATTRIBUTES:
             continue
         for attribute, difference in numeric_differences(desired, current).items():
             largest[attribute] = max(largest.get(attribute, 0.0), difference)
