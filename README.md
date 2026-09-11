@@ -132,6 +132,15 @@ pick up the new title until the entry reloads.
 The helper options hold the timers and the comparison rules. The rules are per
 domain, and they apply to every member of that domain in the scene.
 
+## Localization
+
+Scene State ships English and Polish. The sensor's displayed name is
+translated, so a Polish Home Assistant shows `Stan sceny <title>` where an
+English one shows `Scene state <title>`. Home Assistant gives some languages,
+Polish among them, their own entity ids instead of falling back to English,
+so a Polish instance gets an id such as `binary_sensor.stan_sceny_<title>`
+while an English one keeps `binary_sensor.scene_state_<title>`.
+
 ## Upgrading from 0.0.1
 
 Release 0.0.1 applied a built-in tolerance to numeric attributes such as

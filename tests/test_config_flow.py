@@ -876,3 +876,26 @@ def test_strings_and_translations_agree() -> None:
     strings = json.loads((root / "strings.json").read_text())
     english = json.loads((root / "translations" / "en.json").read_text())
     assert strings == english
+
+
+def _key_paths(data: dict[str, Any], prefix: str = "") -> set[str]:
+    paths: set[str] = set()
+    for key, value in data.items():
+        path = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            paths |= _key_paths(value, path)
+        else:
+            paths.add(path)
+    return paths
+
+
+def test_polish_translation_matches_english_key_structure() -> None:
+    """pl.json must offer a translation for every key en.json defines, and no other.
+
+    A missing key falls back to English, which is tolerable, but a stray or
+    misspelled key is dead weight that this test catches.
+    """
+    root = Path(__file__).parent.parent / "custom_components" / "scene_state"
+    english = json.loads((root / "translations" / "en.json").read_text())
+    polish = json.loads((root / "translations" / "pl.json").read_text())
+    assert _key_paths(polish) == _key_paths(english)

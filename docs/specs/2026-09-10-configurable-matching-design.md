@@ -291,14 +291,28 @@ The entity name carries a fixed prefix, `Scene state <entry title>`. The entry
 title itself is not prefixed, because the Helpers page already shows the
 integration name next to it, and the prefix only earns its keep in the entity
 picker, which lists every entity in the system without grouping by
-integration. The prefix reaches the entity id through `_attr_name`. Home
-Assistant's `_name_internal` returns that value as the entity's name, and
-`suggested_object_id` passes it to the platform as `object_id_base`, which the
-entity registry slugifies into the id, so a scene titled `Movie` yields
-`binary_sensor.scene_state_movie`. `_attr_has_entity_name` plays no part in
-that, because it only decides whether a device name is prepended to the
-entity's own name. This entity has no device, so the flag changes nothing
-about the id, the friendly name, or `original_name`.
+integration. The name comes from a translation rather than a Python literal.
+The entity sets `_attr_translation_key = "scene_state"` and, per instance,
+`_attr_translation_placeholders = {"scene": entry.title}`. Home Assistant's
+`Entity._name_internal` checks `_attr_name` first and only falls through to
+the translation lookup when it is absent, so the entity does not set
+`_attr_name` at all. The lookup resolves
+`component.scene_state.entity.binary_sensor.scene_state.name` to
+`Scene state {scene}`, and `_substitute_name_placeholders` fills in the
+placeholder, giving `Scene state Movie` for a scene titled `Movie`.
+`_attr_has_entity_name` still plays no part in that, because it only decides
+whether a device name is prepended to the entity's own name, and this entity
+has no device.
+
+The translation also changes which entity id a given Home Assistant instance
+gets. `Entity.suggested_object_id` builds the object id from
+`object_id_platform_translations`, and `entity_platform.async_load_translations`
+picks translations in the Home Assistant instance's configured language for
+that set when the language is in `homeassistant.generated.languages.NATIVE_ENTITY_IDS`,
+falling back to English otherwise. Polish is on that list, so a Polish
+instance gets `binary_sensor.stan_sceny_movie`, while an English instance
+keeps `binary_sensor.scene_state_movie`. Tests run in English, so their
+entity ids are unaffected.
 
 The `user` step gains an optional `name` field. A non-empty, non-whitespace
 value becomes the entry title verbatim. A blank field falls back to

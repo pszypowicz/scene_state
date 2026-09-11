@@ -47,5 +47,12 @@
         "data": {}
       }
     }
+  },
+  "entity": {
+    "binary_sensor": {
+      "scene_state": {
+        "name": "Scene state {scene}"
+      }
+    }
   }
 }
