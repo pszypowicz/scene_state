@@ -116,13 +116,18 @@ Click the button above to start the helper setup. Or start it by hand:
 2. Click Create helper and pick Scene State.
 3. Select a scene and adjust the grace period and the debounce if needed.
 
-The sensor is named `Scene state <scene>`, so all of them group together in
-the entity picker regardless of what the scene itself is called.
+The sensor is named `Scene state <title>`, where the title is the scene's own
+name unless you set one on the create form, so every one of them groups
+together in the entity picker regardless of what the scene itself is called.
 
 You can create more than one helper for the same scene. Give each one a name
 on the create form to tell them apart, for example one with a tight tolerance
 and one with a loose one. Leaving the name blank titles the helper after the
 scene, as before.
+
+Renaming a helper later, from its menu on the Helpers page, changes the
+title. The entity id never changes, and the sensor's displayed name does not
+pick up the new title until the entry reloads.
 
 The helper options hold the timers and the comparison rules. The rules are per
 domain, and they apply to every member of that domain in the scene.
@@ -145,6 +150,13 @@ attribute is the repair there.
 Release 0.0.1 also limited a desired color temperature to the range the light
 reported. That guard is gone. A scene asking for a kelvin outside a bulb's
 range now needs a tolerance, even for a light that matched before.
+
+Release 0.1.0 also prefixes the sensor's name. A helper created before this
+release keeps its old entity id, because upgrading never renames an entity.
+Its displayed name does pick up the new `Scene state <title>` form, so the
+name and the entity id no longer match for that helper. Delete and recreate
+the helper to get an entity id in the new form. Recreating is safe as long as
+nothing, no automation, script, or dashboard, still refers to the old id.
 
 Your existing helpers keep their timers. For each helper that turns off,
 follow the steps in [When the sensor reports off](#when-the-sensor-reports-off).

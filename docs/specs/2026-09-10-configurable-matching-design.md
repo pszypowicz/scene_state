@@ -289,20 +289,25 @@ init  ── empty dropdown ──> write options, close
 
 The entity name carries a fixed prefix, `Scene state <entry title>`. The entry
 title itself is not prefixed, because the Helpers page already shows the
-integration name next to it; the prefix only earns its keep in the entity
+integration name next to it, and the prefix only earns its keep in the entity
 picker, which lists every entity in the system without grouping by
-integration. With `_attr_has_entity_name` true and no device, Home Assistant
-slugifies the full name into the entity ID, so a scene titled `Movie` yields
-`binary_sensor.scene_state_movie`.
+integration. The prefix reaches the entity id through `_attr_name`. Home
+Assistant's `_name_internal` returns that value as the entity's name, and
+`suggested_object_id` passes it to the platform as `object_id_base`, which the
+entity registry slugifies into the id, so a scene titled `Movie` yields
+`binary_sensor.scene_state_movie`. `_attr_has_entity_name` plays no part in
+that, because it only decides whether a device name is prepended to the
+entity's own name. This entity has no device, so the flag changes nothing
+about the id, the friendly name, or `original_name`.
 
 The `user` step gains an optional `name` field. A non-empty, non-whitespace
 value becomes the entry title verbatim. A blank field falls back to
 `wrapped_entity_config_entry_title`, exactly as before the field existed. The
 name is stored in the entry options under `CONF_NAME`, which is why it joins
-`RESERVED_OPTION_KEYS`: a stored name is not a domain rule, even though
+`RESERVED_OPTION_KEYS`. A stored name is not a domain rule, even though
 `MatchProfile.from_options` would already skip it on its own, since the value
-is a string rather than a mapping. The options flow does not get a name field;
-a rename is already available from the config entry's own menu.
+is a string rather than a mapping. The options flow does not get a name field,
+because a rename is already available from the config entry's own menu.
 
 **This reverses a decision from the 0.0.1 design**, which configured one
 config entry per scene and aborted a second user-flow submission for the same

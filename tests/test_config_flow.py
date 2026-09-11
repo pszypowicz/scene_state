@@ -9,6 +9,7 @@ from homeassistant.config_entries import SOURCE_USER, ConfigEntryState
 from homeassistant.const import CONF_ENTITY_ID, CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 import voluptuous as vol
@@ -95,6 +96,25 @@ async def test_blank_name_falls_back_to_the_scene_title(hass: HomeAssistant) -> 
     assert result["title"] == "Movie"
 
 
+async def test_whitespace_only_name_falls_back_to_the_scene_title(
+    hass: HomeAssistant,
+) -> None:
+    """A name field holding only whitespace still titles the entry from the scene."""
+    await _setup_scene(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    with patch("custom_components.scene_state.async_setup_entry", return_value=True):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {**MOVIE_OPTIONS, CONF_NAME: "   "}
+        )
+        await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Movie"
+
+
 async def test_supplied_name_becomes_the_title_and_entity_id(
     hass: HomeAssistant,
 ) -> None:
@@ -138,6 +158,14 @@ async def test_two_helpers_on_one_scene_get_distinct_entities(
     assert second["title"] == "Loose"
     assert hass.states.get("binary_sensor.scene_state_strict") is not None
     assert hass.states.get("binary_sensor.scene_state_loose") is not None
+    assert len(hass.config_entries.async_entries(DOMAIN)) == 2
+
+    registry = er.async_get(hass)
+    strict_entry = registry.async_get("binary_sensor.scene_state_strict")
+    loose_entry = registry.async_get("binary_sensor.scene_state_loose")
+    assert strict_entry is not None
+    assert loose_entry is not None
+    assert strict_entry.unique_id != loose_entry.unique_id
 
 
 async def test_options_flow_updates_and_reloads(hass: HomeAssistant) -> None:
