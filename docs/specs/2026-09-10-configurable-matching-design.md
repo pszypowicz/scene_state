@@ -142,14 +142,16 @@ tolerance, and the flow measures the gap and suggests it.
 The tolerances step measures the live difference for every field it renders.
 
 1. For each member of the domain, read the desired value and the current value.
-2. Skip a member that is missing, `unavailable`, or `unknown`.
+2. Skip a member that is missing, `unavailable`, `unknown`, or whose current
+   state string differs from the desired one.
 3. For a number, the difference is the absolute difference. For a sequence, it
    is the largest absolute difference across the elements.
 4. The measurement for an attribute is the largest difference across the
    members.
 5. The suggested value of a field is the stored tolerance when the entry holds
    one. Otherwise it is the measurement.
-6. The step description lists every measurement, whether stored or not.
+6. The step description lists the measurement of every attribute the step
+   renders a field for, whether stored or not.
 
 Rule 5 keeps a second visit from overwriting a value that the user chose. Rule 6
 keeps the current measurement visible on that second visit.
@@ -391,8 +393,9 @@ RESERVED_OPTION_KEYS: Final = frozenset(
 
 - The flow never raises when the scene is missing or unloaded. The `configure`
   field is left out, and the timing fields still work.
-- A member that is missing, `unavailable`, or `unknown` is skipped during
-  measurement. It does not make the flow fail.
+- A member that is missing, `unavailable`, `unknown`, or whose current state
+  string differs from the desired one, is skipped during measurement. It does
+  not make the flow fail.
 - A malformed desired value, for example a color sequence of the wrong length,
   is a mismatch with a reason.
 - `configure` never reaches the entry. A test asserts it.
