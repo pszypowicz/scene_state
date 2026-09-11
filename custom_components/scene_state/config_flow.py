@@ -284,8 +284,7 @@ async def _tolerance_suggestion(
 ) -> dict[str, Any]:
     """Suggest the stored tolerance, or the measured difference.
 
-    Reached only once the schema already found a numeric attribute to tune,
-    so the selection here is never None.
+    The None branch narrows the optional return of `_selected` for mypy.
     """
     picked = _selected(handler)
     if picked is None:
@@ -303,18 +302,23 @@ async def _tolerance_suggestion(
 async def _tolerance_description(
     handler: SchemaCommonFlowHandler,
 ) -> dict[str, str]:
-    """Report the live difference per attribute, so the drift stays visible."""
+    """Report the live difference per attribute that the step renders a field for."""
     picked = _selected(handler)
     if picked is None:
         return {"measured": "none"}
-    domain, _selection = picked
-    measured = _measurements(handler.parent_handler.hass, _targets(handler), domain)
-    if not measured:
+    domain, selected = picked
+    targets = _targets(handler)
+    fields = _tolerance_attributes(targets, domain, selected)
+    measured = _measurements(handler.parent_handler.hass, targets, domain)
+    shown = {
+        attribute: measured[attribute] for attribute in fields if attribute in measured
+    }
+    if not shown:
         return {"measured": "none"}
     return {
         "measured": ", ".join(
             f"{attribute} {difference:g}"
-            for attribute, difference in sorted(measured.items())
+            for attribute, difference in sorted(shown.items())
         )
     }
 

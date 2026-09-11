@@ -145,6 +145,35 @@ COLOR_OPTIONS = {
     CONF_DEBOUNCE: 1.0,
 }
 
+BOOLEAN_SCENE = {
+    "name": "Muted",
+    "entities": {
+        "media_player.a": {
+            "state": "playing",
+            "is_volume_muted": True,
+            "volume_level": 0.3,
+        },
+    },
+}
+BOOLEAN_OPTIONS = {
+    CONF_ENTITY_ID: "scene.muted",
+    CONF_GRACE_PERIOD: 5.0,
+    CONF_DEBOUNCE: 1.0,
+}
+
+SHARED_NAME_SCENE = {
+    "name": "Shared",
+    "entities": {
+        "climate.a": {"state": "heat", "temperature": 21},
+        "water_heater.b": {"state": "eco", "temperature": 50},
+    },
+}
+SHARED_NAME_OPTIONS = {
+    CONF_ENTITY_ID: "scene.shared",
+    CONF_GRACE_PERIOD: 5.0,
+    CONF_DEBOUNCE: 1.0,
+}
+
 
 async def _open_color_options(
     hass: HomeAssistant,
@@ -460,9 +489,13 @@ async def test_tolerances_suggests_the_measured_difference(
 
 
 async def test_tolerances_skips_unknown_members(hass: HomeAssistant) -> None:
-    """An unavailable member contributes no measurement."""
+    """An unavailable member contributes no measurement.
+
+    The unavailable member keeps a brightness far from its target, so the
+    measurement stays at zero only while the member is skipped.
+    """
     hass.states.async_set("light.a", "on", {"brightness": 100, "hs_color": [30, 40]})
-    hass.states.async_set("light.b", "unavailable")
+    hass.states.async_set("light.b", "unavailable", {"brightness": 250})
     _entry, result = await _open_color_options(hass)
 
     result = await _pick_light(hass, result)
@@ -471,6 +504,7 @@ async def test_tolerances_skips_unknown_members(hass: HomeAssistant) -> None:
     )
 
     assert _suggested(result, "brightness") == 0.0
+    assert result["description_placeholders"]["measured"] == "brightness 0"
 
 
 async def test_tolerances_suggests_the_stored_value(hass: HomeAssistant) -> None:
@@ -492,6 +526,89 @@ async def test_tolerances_suggests_the_stored_value(hass: HomeAssistant) -> None
 
     assert _suggested(result, "brightness") == 2.0
     assert "brightness 6" in result["description_placeholders"]["measured"]
+
+
+async def test_tolerances_keeps_a_stored_zero(hass: HomeAssistant) -> None:
+    """A stored zero demands an exact match and must survive a second visit."""
+    hass.states.async_set("light.a", "on", {"brightness": 100, "hs_color": [30, 40]})
+    hass.states.async_set("light.b", "on", {"brightness": 206, "effect": "none"})
+    _entry, result = await _open_color_options(
+        hass,
+        options={
+            **COLOR_OPTIONS,
+            "light": {CONF_COMPARE: ["brightness"], "brightness": 0.0},
+        },
+    )
+
+    result = await _pick_light(hass, result)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_COMPARE: ["brightness"]}
+    )
+
+    assert _suggested(result, "brightness") == 0.0
+    assert "brightness 6" in result["description_placeholders"]["measured"]
+
+
+async def test_tolerances_measure_one_domain_only(hass: HomeAssistant) -> None:
+    """A member of another domain contributes no measurement.
+
+    Both domains store an attribute called temperature, and the water heater
+    drifts much further, so its difference must not reach the climate form.
+    """
+    assert await async_setup_component(hass, "scene", {"scene": [SHARED_NAME_SCENE]})
+    await hass.async_block_till_done()
+    hass.states.async_set("climate.a", "heat", {"temperature": 21.5})
+    hass.states.async_set("water_heater.b", "eco", {"temperature": 60})
+    entry = MockConfigEntry(domain=DOMAIN, title="Shared", options=SHARED_NAME_OPTIONS)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {CONF_GRACE_PERIOD: 5.0, CONF_DEBOUNCE: 1.0, CONF_CONFIGURE: "climate"},
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_COMPARE: ["temperature"]}
+    )
+
+    assert _keys(result) == ["temperature"]
+    assert _suggested(result, "temperature") == 0.5
+    assert result["description_placeholders"]["measured"] == "temperature 0.5"
+
+
+async def test_tolerances_offer_no_field_for_a_boolean(hass: HomeAssistant) -> None:
+    """A boolean attribute is selectable and has no tolerance."""
+    assert await async_setup_component(hass, "scene", {"scene": [BOOLEAN_SCENE]})
+    await hass.async_block_till_done()
+    hass.states.async_set(
+        "media_player.a", "playing", {"is_volume_muted": True, "volume_level": 0.3}
+    )
+    entry = MockConfigEntry(domain=DOMAIN, title="Muted", options=BOOLEAN_OPTIONS)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_GRACE_PERIOD: 5.0,
+            CONF_DEBOUNCE: 1.0,
+            CONF_CONFIGURE: "media_player",
+        },
+    )
+    assert _selector_options(result, CONF_COMPARE) == [
+        "is_volume_muted",
+        "volume_level",
+    ]
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_COMPARE: ["is_volume_muted", "volume_level"]}
+    )
+
+    assert _keys(result) == ["volume_level"]
 
 
 async def test_tolerances_step_is_skipped_without_a_number(
