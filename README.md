@@ -63,8 +63,8 @@ Check `mismatched_entities` on the sensor to find the member at fault. If that
 member is loaded but does not report the attribute at all, it can never
 match, and a tolerance does not help. Clear the attribute instead. A member
 that is unavailable or missing is a different case. It does not appear in
-`mismatched_entities`, and the sensor reports `unknown` rather than `off`
-until that member comes back.
+`mismatched_entities`, and as long as no other member mismatches, the sensor
+reports `unknown` rather than `off` until that member comes back.
 
 To clear an attribute or set a tolerance, open the helper options. On the
 Helpers page, click the helper, then Configure.

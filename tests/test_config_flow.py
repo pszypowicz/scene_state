@@ -549,6 +549,33 @@ async def test_tolerances_keeps_a_stored_zero(hass: HomeAssistant) -> None:
     assert "brightness 6" in result["description_placeholders"]["measured"]
 
 
+async def test_tolerances_skip_a_member_in_the_wrong_state(
+    hass: HomeAssistant,
+) -> None:
+    """A member whose state differs from the desired one can never match.
+
+    match_state rejects on the state string before it reads any attribute,
+    so an attribute difference on such a member must not widen the
+    suggested tolerance for the rest of the domain.
+    """
+    await _setup_mixed_scene(hass)
+    hass.states.async_set("light.a", "on", {"brightness": 100, "effect": "none"})
+    hass.states.async_set("cover.b", "closed", {"current_position": 0})
+    _entry, result = await _open_options(hass)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {CONF_GRACE_PERIOD: 5.0, CONF_DEBOUNCE: 1.0, CONF_CONFIGURE: "cover"},
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_COMPARE: ["current_position"]}
+    )
+
+    assert result["step_id"] == "tolerances"
+    assert _suggested(result, "current_position") == 0.0
+    assert result["description_placeholders"]["measured"] == "none"
+
+
 async def test_tolerances_measure_one_domain_only(hass: HomeAssistant) -> None:
     """A member of another domain contributes no measurement.
 

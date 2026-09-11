@@ -100,7 +100,14 @@ def test_select_color_attribute_white_mode_selects_nothing() -> None:
 
 @pytest.mark.parametrize(
     "attribute",
-    ["color_temp_kelvin", "hs_color", "xy_color", "rgb_color", "rgbw_color"],
+    [
+        "color_temp_kelvin",
+        "hs_color",
+        "xy_color",
+        "rgb_color",
+        "rgbw_color",
+        "rgbww_color",
+    ],
 )
 def test_selection_name_folds_color(attribute: str) -> None:
     """Every color representation of a light is selected under one name."""
@@ -123,6 +130,7 @@ def test_selection_name_leaves_other_names() -> None:
         (True, False),
         ("rainbow", False),
         (["a", "b"], False),
+        ([True, False], False),
         (None, False),
     ],
 )

@@ -24,8 +24,11 @@ ATTR_COLOR_MODE: Final = "color_mode"
 ATTR_COLOR_TEMP_KELVIN: Final = "color_temp_kelvin"
 
 # The scene.create service stores the full live attribute set of a member, so a
-# snapshot scene carries capability attributes. Core publishes these through
-# capability_attributes, and they describe what an entity can do.
+# snapshot scene carries attributes that describe the entity rather than its
+# state. Some are presentation, such as friendly_name and icon. Some are
+# capability information, such as device_class and supported_features. The
+# prefix and suffix rules below catch the capability lists, such as
+# supported_color_modes and effect_list, that are not named here.
 METADATA: Final = frozenset(
     {
         ATTR_ASSUMED_STATE,
@@ -90,7 +93,9 @@ def _excluded_for_light(attributes: Mapping[str, Any]) -> frozenset[str]:
     """Return the light attributes that the color rule removes.
 
     A light reports every color representation at once, and all of them derive
-    from one value. One representation carries the comparison.
+    from one value, so one representation carries the comparison and the rest
+    are excluded. `color_mode` is excluded too, because it only names which
+    representation is authoritative and carries no color value of its own.
     """
     selected = select_color_attribute(attributes)
     return (COLOR_ATTRIBUTES - {selected}) | {ATTR_COLOR_MODE}
@@ -119,6 +124,13 @@ def selection_name(attribute: str, domain: str) -> str:
     return attribute
 
 
+def _element(item: Any) -> float:
+    """Convert one sequence element, rejecting a boolean the same way the scalar guard does."""
+    if isinstance(item, bool):
+        raise TypeError("bool is not numeric")
+    return float(item)
+
+
 def _numbers(value: Any) -> tuple[float, ...] | None:
     """Return the value as a tuple of floats, or None when it is not numeric."""
     if isinstance(value, bool):
@@ -128,7 +140,7 @@ def _numbers(value: Any) -> tuple[float, ...] | None:
     if isinstance(value, str) or not isinstance(value, Sequence):
         return None
     try:
-        return tuple(float(item) for item in value)
+        return tuple(_element(item) for item in value)
     except TypeError, ValueError:
         return None
 

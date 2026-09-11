@@ -223,7 +223,14 @@ def test_exact_profile(desired: State, current: State, expected: MatchResult) ->
             _light("on", effect="none"),
             _profile("light", ["effect"], effect=5),
             MatchResult(False, "effect: wanted rainbow, got none"),
-            id="tolerance_on_a_string_is_a_mismatch",
+            id="tolerance_on_a_string_falls_back_to_equality_and_mismatches",
+        ),
+        pytest.param(
+            _light("on", effect="rainbow"),
+            _light("on", effect="rainbow"),
+            _profile("light", ["effect"], effect=5),
+            MatchResult(True),
+            id="tolerance_on_a_string_falls_back_to_equality_and_matches",
         ),
         pytest.param(
             State("cover.test", "open", {"current_position": 70}),

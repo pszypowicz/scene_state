@@ -234,6 +234,12 @@ def _measurements(
         current = hass.states.get(entity_id)
         if current is None or current.state in UNKNOWN_STATES:
             continue
+        if current.state != desired.state:
+            # match_state rejects on the state string before it reads any
+            # attribute, so an attribute difference is meaningless while the
+            # states differ, and such a member could never match regardless
+            # of the tolerance.
+            continue
         for attribute, difference in numeric_differences(desired, current).items():
             largest[attribute] = max(largest.get(attribute, 0.0), difference)
     return largest
@@ -242,9 +248,11 @@ def _measurements(
 def _selected(handler: SchemaCommonFlowHandler) -> tuple[str, list[str]] | None:
     """Return the picked domain and its stored selection, None when there is none.
 
-    The domain step skips itself when its scene is no longer loaded, so the
-    domain rule can be absent, malformed, or missing its compare list by the
-    time this step runs.
+    No domain is picked when flow_state never received one, for example a
+    hand-edited entry that carries a stale configure value. The domain step
+    also skips itself when its scene has nothing left to compare, which can
+    leave the stored rule absent, malformed, or missing its compare list by
+    the time this step runs.
     """
     domain = handler.flow_state.get(FLOW_STATE_DOMAIN)
     if domain is None:
@@ -284,7 +292,8 @@ async def _tolerance_suggestion(
 ) -> dict[str, Any]:
     """Suggest the stored tolerance, or the measured difference.
 
-    The None branch narrows the optional return of `_selected` for mypy.
+    The None branch covers a domain rule that is absent, malformed, or
+    missing its compare list, the runtime states `_selected` describes.
     """
     picked = _selected(handler)
     if picked is None:

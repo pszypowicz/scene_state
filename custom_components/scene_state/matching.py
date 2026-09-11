@@ -47,7 +47,7 @@ class MatchProfile:
     comparable attribute of that domain counts. An empty selection is different,
     and it compares the state string only.
 
-    The selection and the tolerance key different names for a light color
+    The selection and the tolerance use different names for a light color
     attribute. `compares` folds the attribute name through `selection_name`, so
     every color representation shares one selection under "color". `tolerance`
     looks up the raw attribute name instead, because `hs_color` and `xy_color`

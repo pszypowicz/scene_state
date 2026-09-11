@@ -79,14 +79,15 @@ These rules replace the Matching rules section of the 0.0.1 design.
 8. Numeric tolerances are inclusive. A difference equal to the tolerance is a
    match.
 9. A stored `compare` list of zero length compares the state string only.
-10. A stored tolerance against a value that is not numeric is a mismatch with a
-    reason.
+10. A stored tolerance against a value that is not numeric falls back to an
+    exact equality check.
 
 ### Metadata filter
 
 The `scene.create` service stores the full live attribute set of a member, so a
-snapshot scene carries attributes that do not describe state. Core classifies
-these as capability attributes. The filter drops them before the user sees them.
+snapshot scene carries attributes that describe the entity rather than its
+state, some as presentation and some as capability. The filter drops them
+before the user sees them.
 
 | Rule        | Values                                                                                                                                                          |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -97,7 +98,8 @@ these as capability attributes. The filter drops them before the user sees them.
 The exact names come from the constants in `homeassistant.const`, not from
 string literals. The prefixes and the suffixes follow Home Assistant naming
 conventions and name no platform. The `_modes` suffix drops `hvac_modes` and
-keeps `fan_mode`.
+keeps `fan_mode`. The prefix and suffix rules, not the exact names, are what
+catch the capability lists, such as `supported_color_modes` and `effect_list`.
 
 The filter removes capability metadata only. A media player snapshot also
 carries `media_position` and `media_title`, which change on every track. Those
@@ -153,7 +155,10 @@ Rule 5 keeps a second visit from overwriting a value that the user chose. Rule 6
 keeps the current measurement visible on that second visit.
 
 The comparison uses `difference <= tolerance + FLOAT_MARGIN`, so a tolerance
-equal to the measurement makes the present state match.
+equal to the measurement makes a present, reporting member match. It does not
+help a member that is unavailable, since the tracker never calls the
+comparator for it, nor a loaded member that does not report the attribute at
+all, since a missing attribute is a mismatch before any tolerance applies.
 
 ## Options storage
 
@@ -207,10 +212,12 @@ the list is empty, and the `configure` field is left out of the schema.
 input unchanged. `configure` therefore reaches the options, because `next_step`
 receives the options and nothing else.
 
-`next_step` is a callable. It returns `"domain"` when the options hold
-`configure`, and `None` otherwise. `None` writes the options to the entry and
-closes the dialog. The `domain` step removes `configure` again, so the key lives
-in the options for one step.
+`next_step` is a callable, `_after_init`. It pops `configure` from the options
+right away, then returns `"domain"` when the key held a value, and `None`
+otherwise. `None` writes the options to the entry and closes the dialog.
+Popping the key in this routing callable, rather than in the `domain` step,
+keeps the flow from getting stuck when the tracked scene disappears and the
+`domain` step skips itself.
 
 So a submit with an empty dropdown saves and closes. There is no separate save
 step.
@@ -232,10 +239,10 @@ labels in code if it does not.
 and every option otherwise. So a first visit arrives with everything checked,
 which is the exact-match default made visible.
 
-`validate_user_input` does three things. It removes `configure` from the options,
-because the routing callable reads only the options and the key must not reach
-storage. It keeps the stored tolerances of the attributes that stay selected,
-and drops the rest. It returns a mapping under the domain key.
+`validate_user_input` does two things. It keeps the stored tolerances of the
+attributes that stay selected, and drops the rest. It returns a mapping under
+the domain key. `configure` never reaches this step; the `init` step's own
+routing callable, `_after_init`, already popped it.
 
 A tolerance survives when `selection_name` maps its concrete attribute to a name
 in the new `compare` list. So a cleared `color` box drops the tolerance of every
@@ -375,7 +382,9 @@ never replaces its profile in place.
 ```python
 CONF_COMPARE: Final = "compare"
 CONF_CONFIGURE: Final = "configure"
-RESERVED_OPTION_KEYS: Final = frozenset({CONF_ENTITY_ID, CONF_GRACE_PERIOD, CONF_DEBOUNCE})
+RESERVED_OPTION_KEYS: Final = frozenset(
+    {CONF_ENTITY_ID, CONF_GRACE_PERIOD, CONF_DEBOUNCE, CONF_CONFIGURE}
+)
 ```
 
 ### Error handling
@@ -401,7 +410,8 @@ RESERVED_OPTION_KEYS: Final = frozenset({CONF_ENTITY_ID, CONF_GRACE_PERIOD, CONF
   tolerance, and a match with a tolerance of one. A `compare` list that omits an
   attribute ignores it. An empty `compare` list compares the state only. A
   `compare` list holding `color` compares the selected representation. A stored
-  tolerance on a string value is a mismatch. The kelvin tests from 0.0.1 lose
+  tolerance on a string value falls back to an exact equality check, matching
+  equal strings and mismatching unequal ones. The kelvin tests from 0.0.1 lose
   the clamp and gain a tolerance.
 - `tests/test_config_flow.py`. The `init` dropdown lists the domains of the
   scene and nothing else. An unloaded scene leaves the dropdown out. A submit
