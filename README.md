@@ -2,10 +2,13 @@
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/v/release/pszypowicz/scene_state)](https://github.com/pszypowicz/scene_state/releases)
+[![Home Assistant](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fpszypowicz%2Fscene_state%2Fmain%2Fhacs.json&query=%24.homeassistant&label=Home%20Assistant&color=41BDF5&prefix=%E2%89%A5)](https://www.home-assistant.io)
 [![CI](https://github.com/pszypowicz/scene_state/actions/workflows/ci.yml/badge.svg)](https://github.com/pszypowicz/scene_state/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/pszypowicz/scene_state)](LICENSE)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 [![Maintainer](https://img.shields.io/badge/maintainer-%40pszypowicz-blue.svg)](https://github.com/pszypowicz)
+
+[![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=pszypowicz&repository=scene_state&category=integration)
 
 A Home Assistant helper that answers one question for a scene: do all entities
 in the scene match the states that the scene defines?
@@ -97,9 +100,8 @@ Attributes:
 
 ## Installation
 
-[![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=pszypowicz&repository=scene_state&category=integration)
-
-Click the button above to open the repository in HACS. Or add it by hand:
+Click the HACS badge at the top of this page to open the repository in HACS. Or
+add it by hand:
 
 1. In HACS, open the menu in the top right, then Custom repositories.
 2. Add `https://github.com/pszypowicz/scene_state` with category Integration.
