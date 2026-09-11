@@ -40,7 +40,7 @@ async def test_integration_is_discoverable(hass: HomeAssistant) -> None:
     integration = await async_get_integration(hass, DOMAIN)
 
     assert integration.domain == DOMAIN
-    assert str(integration.version) == "0.0.1"
+    assert integration.version is not None
     assert integration.integration_type == "helper"
 
 

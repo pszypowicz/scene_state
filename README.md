@@ -18,19 +18,19 @@ them drifts away.
 ## How it works
 
 The helper reads the target states from the scene and compares them with the
-current entity states. It compares only the attributes that the scene defines,
-and it applies a tolerance to numeric attributes, because devices round values
-and report colors in their own representation.
+current entity states. It compares only the attributes that the scene stores,
+and it compares them exactly. A scene is set when every member matches
+perfectly.
 
-| Domain | Compared attributes and tolerance |
-| --- | --- |
-| light | brightness within 3, one color representation (kelvin within 50, hue and saturation within 5, xy within 0.02, rgb channels within 5), effect exact |
-| cover | position and tilt within 3 |
-| fan | percentage within 3, oscillating, direction, and preset mode exact |
-| climate | target temperatures within 0.5, preset, fan, and swing mode exact |
-| media_player | volume within 0.02, source and sound mode exact |
-| humidifier | target humidity within 2, mode exact |
-| other | state only |
+Devices do not always report back the value that the scene asked for. A light
+converts a color through its own gamut, an integration that stores brightness as
+a percent returns 101 for 100, and a time based cover estimates its position. For
+each of those, set a tolerance in the helper options.
+
+Two kinds of attribute never take part. Capability attributes, such as
+`supported_features` and `effect_list`, describe what an entity can do. For a
+light, only one color representation counts, because a light reports all of them
+at once and all of them derive from one value.
 
 If the target state is `off` or `closed`, attributes are ignored.
 
@@ -41,14 +41,46 @@ Two timers keep the sensor stable:
 - The debounce starts when a member changes. Members are compared once no
   further change arrives within it. Default 1 second.
 
+### When the sensor reports off
+
+Three different causes make the sensor report `off`, and each one needs its own
+repair.
+
+Clear the attribute when you do not care about it. This is also the only repair
+for an attribute that drifts without limit, such as `media_position` or
+`media_title` on a media player, or `current_temperature` on a climate entity.
+A scene created by the `scene.create` service stores every attribute of a
+member, including these, and no tolerance can catch them.
+
+Set a tolerance when a value is close but not exact. This is the case for
+brightness that round-trips through a percent, a color a bulb converts through
+its own gamut, or a cover that estimates its position.
+
+Check the `mismatched_entities` attribute when a member is unavailable, or when
+its live state does not report the attribute at all. The suggested tolerance
+comes from the other members. Accepting it does not fix a member that is missing
+or unavailable, and raising the tolerance does not help either.
+
+To clear an attribute or set a tolerance, open the helper options:
+
+1. Open the helper options.
+2. Pick the domain in the dropdown and submit.
+3. Clear any attribute that you do not care about, then submit.
+4. Read the measured difference in the description, accept the prefilled
+   tolerance, and submit.
+5. Leave the dropdown empty and submit to save.
+
+Each tolerance uses the scale of the attribute itself. Brightness is 0 to 255,
+color temperature is in kelvin, and a media player volume is 0 to 1.
+
 ## Sensor states
 
-| State | Meaning |
-| --- | --- |
-| `on` | every member matches |
-| `off` | at least one member does not match |
-| `unknown` | no member mismatches, but at least one is unavailable or missing |
-| `unavailable` | the scene entity is not loaded |
+| State         | Meaning                                                          |
+| ------------- | ---------------------------------------------------------------- |
+| `on`          | every member matches                                             |
+| `off`         | at least one member does not match                               |
+| `unknown`     | no member mismatches, but at least one is unavailable or missing |
+| `unavailable` | the scene entity is not loaded                                   |
 
 Attributes:
 
@@ -76,7 +108,15 @@ Click the button above to start the helper setup. Or start it by hand:
 2. Click Create helper and pick Scene State.
 3. Select a scene and adjust the grace period and the debounce if needed.
 
-Both timers can be changed later from the helper options.
+The helper options hold the timers and the comparison rules. The rules are per
+domain, and they apply to every member of that domain in the scene.
+
+## Upgrading from 0.0.1
+
+Release 0.0.1 applied built-in tolerances to fourteen attributes. Release 0.1.0
+compares exactly until you set a tolerance, so a sensor that reported `on` can
+report `off` after the upgrade. Your existing helpers keep their timers. Follow
+the steps under When the sensor reports off for each helper that turns off.
 
 ## Limitations
 
